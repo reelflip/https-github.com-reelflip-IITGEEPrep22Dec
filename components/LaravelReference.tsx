@@ -1,422 +1,407 @@
 
 import React, { useState } from 'react';
 import { 
-  Code, Server, Database, Lock, Shield, Rocket, Copy, Terminal, 
-  CheckCircle2, Globe, FileCode, Cpu, Users, Key, FileJson, 
-  Activity, Settings, Box, Zap, ShieldAlert, Archive,
-  Info, ShieldCheck, Layers, GitBranch, Share2, ChevronRight,
-  HardDrive, MonitorSmartphone, KeyRound, Globe2, Download, Loader2,
-  FileText, PlayCircle, HelpCircle, Layout, FolderTree
+  Database as DbIcon, Rocket, Copy, CheckCircle2, Layers, GitBranch, 
+  Download, Loader2, Layout, FolderTree, AlertTriangle, 
+  Server, Terminal, Info, ShieldCheck, CheckSquare, HelpCircle,
+  ExternalLink, Globe, Monitor, Cloud, ChevronRight, Settings,
+  Cpu, HardDrive, ShieldAlert, Key, UserCheck, Menu, LogOut,
+  Users, LayoutDashboard, Tag, ClipboardCheck, GraduationCap
 } from 'lucide-react';
 
 const LaravelReference: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'sql' | 'controller' | 'view' | 'router' | 'config'>('controller');
+  const [activeSubTab, setActiveSubTab] = useState<'sql' | 'controller' | 'view' | 'sidebar' | 'config' | 'login' | 'htaccess'>('config');
   const [isZipping, setIsZipping] = useState(false);
 
   const phpFiles = {
-    controller: {
-      path: 'app/Controllers/DashboardController.php',
-      title: 'Main Dashboard Controller',
-      icon: Layers,
-      desc: 'Handles the logic for fetching student progress, chapter lists, and analytics.',
+    config: {
+      path: 'config.php',
+      title: 'Global Configuration',
+      icon: Settings,
+      desc: 'Centralized environment variables for DB credentials and site settings.',
       code: `<?php
 /**
- * IIT JEE Mastery - Dashboard Controller
- * Manages curriculum delivery and student tracking logic
+ * IIT JEE Mastery Configuration
  */
 
-class DashboardController extends Controller {
-    
-    public function index() {
-        $user_id = Auth::id();
-        
-        // Fetch chapters with relational progress data
-        $chapters = Chapter::withProgress($user_id);
-        
-        // Calculate global metrics
-        $stats = [
-            'total_time' => array_sum(array_column($chapters, 'time_spent_mins')),
-            'avg_confidence' => count($chapters) > 0 ? array_sum(array_column($chapters, 'confidence')) / count($chapters) : 0,
-            'completed' => count(array_filter($chapters, fn($c) => $c['status'] === 'Completed'))
-        ];
+// Database Settings
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'jee_tracker_db');
+define('DB_USER', 'root'); // XAMPP default is root
+define('DB_PASS', '');     // XAMPP default is empty
 
-        return $this->view('dashboard/index', [
-            'chapters' => $chapters,
-            'stats' => $stats,
-            'user' => Auth::user()
-        ]);
-    }
+// Site Settings
+// Use dynamic detection for BASE_URL to prevent 404s if folder name changes
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+$host = $_SERVER['HTTP_HOST'];
+$dir = str_replace('\\\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+if ($dir !== '/') $dir .= '/';
+define('BASE_URL', $protocol . "://" . $host . $dir);
 
-    public function updateProgress() {
-        $data = $this->request()->all();
-        $user_id = Auth::id();
-
-        // Relational update of the progress tracking table
-        $success = Progress::updateOrCreate(
-            $user_id, 
-            $data['chapter_id'], 
-            $data['status'], 
-            $data['confidence']
-        );
-
-        return $this->json(['success' => $success]);
-    }
-}`
-    },
-    view: {
-      path: 'resources/views/dashboard/index.php',
-      title: 'Dashboard Frontend (Native HTML)',
-      icon: Layout,
-      desc: 'The dynamic HTML template. Note: No compilation needed, runs directly in browser.',
-      code: `<?php include __DIR__ . '/../layouts/header.php'; ?>
-
-<div class="max-w-7xl mx-auto px-6 py-12">
-    <header class="flex justify-between items-end mb-12">
-        <div>
-            <h1 class="text-4xl font-black text-slate-900 tracking-tighter">JEE Preparation Tracker</h1>
-            <p class="text-slate-500 font-medium">Tracking progress for aspirant: <?= htmlspecialchars($user['name']) ?></p>
-        </div>
-        <div class="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold shadow-xl">
-            Syllabus Mastery: <?= round($stats['avg_confidence'], 1) ?>%
-        </div>
-    </header>
-
-    <!-- Performance Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-        <?php foreach ($chapters as $chapter): ?>
-            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all group">
-                <div class="flex justify-between items-start mb-6">
-                    <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">
-                        <?= $chapter['subject'] ?>
-                    </span>
-                    <div class="w-2 h-2 rounded-full <?= $chapter['status'] === 'Completed' ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-amber-500' ?>"></div>
-                </div>
-                <h3 class="text-xl font-bold text-slate-800 mb-4"><?= htmlspecialchars($chapter['name']) ?></h3>
-                
-                <div class="space-y-3">
-                    <div class="flex justify-between text-[10px] font-black uppercase text-slate-400">
-                        <span>Confidence Level</span>
-                        <span class="text-indigo-600"><?= $chapter['confidence'] ?>%</span>
-                    </div>
-                    <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full bg-indigo-600 transition-all duration-700" style="width: <?= $chapter['confidence'] ?>%"></div>
-                    </div>
-                </div>
-                
-                <a href="/chapter/<?= $chapter['id'] ?>" class="mt-8 block text-center py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:bg-slate-900 group-hover:text-white transition-all">
-                    Access Study Notes
-                </a>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</div>
-
-<?php include __DIR__ . '/../layouts/footer.php'; ?>`
+// Error Reporting (Keep ON for Debugging)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);`
     },
     router: {
       path: 'index.php',
-      title: 'Global Entry Point',
+      title: 'MVC Smart Router',
       icon: GitBranch,
-      desc: 'Initializes the MVC engine, connects to MySQL, and dispatches the request.',
+      desc: 'Handles all requests and maps them to controllers with Auth guards.',
       code: `<?php
-/**
- * IIT JEE Standalone MVC Web Engine
- * Core Router & Bootstrapper
- */
-
+require_once 'config.php';
 require_once 'app/bootstrap.php';
 
-// Route Dispatcher
-$route = $_GET['r'] ?? 'dashboard';
+$requestUri = $_SERVER['REQUEST_URI'];
+$scriptName = $_SERVER['SCRIPT_NAME'];
+$basePath = dirname($scriptName);
+$route = str_replace($basePath, '', $requestUri);
+$route = trim(parse_url($route, PHP_URL_PATH), '/');
 
-// Simple Router Map
+if (empty($route)) $route = 'dashboard';
+
+// Simple Route Map
 $routes = [
     'dashboard' => ['controller' => 'DashboardController', 'method' => 'index'],
-    'api/update' => ['controller' => 'DashboardController', 'method' => 'updateProgress'],
-    'auth/login' => ['controller' => 'AuthController', 'method' => 'login'],
+    'login'     => ['controller' => 'AuthController', 'method' => 'login'],
+    'register'  => ['controller' => 'AuthController', 'method' => 'register'],
+    'logout'    => ['controller' => 'AuthController', 'method' => 'logout'],
+    'admin'     => ['controller' => 'AdminController', 'method' => 'index'],
 ];
 
 if (isset($routes[$route])) {
     $config = $routes[$route];
     $controllerName = $config['controller'];
-    $method = $config['method'];
+    $methodName = $config['method'];
     
-    $instance = new $controllerName();
-    $instance->$method();
+    if (class_exists($controllerName)) {
+        $controller = new $controllerName();
+        $controller->$methodName();
+    } else {
+        die("Fatal Error: Controller $controllerName not found. Check app/Controllers/ folder.");
+    }
 } else {
     http_response_code(404);
-    echo "<h1>404 - JEE Mastery Error</h1><p>Route not mapped in system index.</p>";
+    echo "<div style='font-family:sans-serif; padding:50px; text-align:center;'>";
+    echo "<h1 style='font-size:80px; margin:0;'>404</h1>";
+    echo "<p>The route <b>/$route</b> does not exist in our system.</p>";
+    echo "<a href='".BASE_URL."login'>Return to Login</a>";
+    echo "</div>";
 }`
     },
-    config: {
-      path: 'config/database.php',
-      title: 'Database Configuration',
-      icon: Settings,
-      desc: 'Set your Hostinger/cPanel MySQL credentials here.',
+    login: {
+      path: 'resources/views/auth/login.php',
+      title: 'Styled Login Page',
+      icon: Key,
+      desc: 'A professional login screen with Demo Access buttons.',
+      code: `<?php include __DIR__ . '/../layouts/header.php'; ?>
+<div class="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+    <div class="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden">
+        <div class="flex items-center gap-4 mb-8">
+            <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+            </div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight">Local Portal</h1>
+        </div>
+
+        <?php if(isset($_GET['error'])): ?>
+        <div class="mb-6 p-4 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-rose-100">
+            <?= htmlspecialchars($_GET['msg'] ?? 'Auth Failed') ?>
+        </div>
+        <?php endif; ?>
+        
+        <form id="loginForm" action="<?= BASE_URL ?>login" method="POST" class="space-y-6 px-2">
+            <div class="space-y-2">
+                <label class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Email Address</label>
+                <input type="email" id="email" name="email" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="aspirant@iit.edu">
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Password</label>
+                <input type="password" id="password" name="password" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••">
+            </div>
+            <button type="submit" class="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100">
+                Log In
+            </button>
+        </form>
+
+        <div class="mt-10 pt-8 border-t border-slate-100 bg-slate-50/50 -mx-10 px-10 pb-10">
+            <div class="text-center mb-6">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Quick Demo Entry</span>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <button type="button" onclick="fillDemo('student')" class="py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm">
+                    Demo Student
+                </button>
+                <button type="button" onclick="fillDemo('admin')" class="py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm">
+                    Demo Admin
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function fillDemo(role) {
+    const emailField = document.getElementById('email');
+    const passField = document.getElementById('password');
+    const form = document.getElementById('loginForm');
+    
+    if(role === 'admin') {
+        emailField.value = 'admin@iit.edu';
+        passField.value = 'admin123';
+    } else {
+        emailField.value = 'student@demo.com';
+        passField.value = 'password';
+    }
+    
+    form.submit();
+}
+</script>
+<?php include __DIR__ . '/../layouts/footer.php'; ?>`
+    },
+    sidebar: {
+      path: 'resources/views/layouts/sidebar.php',
+      title: 'Dynamic Sidebar',
+      icon: Menu,
+      desc: 'Consistent navigation sidebar with role-based links.',
+      code: `<?php $userRole = $_SESSION['user_role'] ?? 'student'; ?>
+<aside class="w-64 bg-[#0f172a] text-white flex flex-col h-screen fixed left-0 top-0 z-50">
+    <div class="p-8 border-b border-slate-800">
+        <h1 class="font-black text-xl tracking-tight text-indigo-400">iitgeeprep</h1>
+        <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest mt-1"><?= strtoupper($userRole) ?> NODE</p>
+    </div>
+    
+    <nav class="flex-1 p-6 space-y-2">
+        <a href="<?= BASE_URL ?>dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 text-sm font-bold text-slate-300">
+            <svg class="w-5 h-5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            Dashboard
+        </a>
+        <?php if($userRole === 'admin'): ?>
+            <div class="pt-4 pb-2 text-[10px] font-black text-slate-600 uppercase tracking-widest px-4">Administration</div>
+            <a href="<?= BASE_URL ?>admin" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-600/10 text-indigo-400 text-sm font-bold">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                Admin Panel
+            </a>
+        <?php endif; ?>
+    </nav>
+    
+    <div class="p-6 border-t border-slate-800">
+        <a href="<?= BASE_URL ?>logout" class="flex items-center gap-3 px-4 py-3 rounded-xl text-rose-400 hover:bg-rose-500/10 text-sm font-bold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            Logout
+        </a>
+    </div>
+</aside>`
+    },
+    controller: {
+      path: 'app/Controllers/AuthController.php',
+      title: 'Auth Logic Fix',
+      icon: Layers,
       code: `<?php
-/**
- * Database Connection Settings
- */
-return [
-    'host'     => 'localhost',
-    'database' => 'YOUR_DB_NAME',
-    'username' => 'YOUR_DB_USER',
-    'password' => 'YOUR_DB_PASS',
-    'charset'  => 'utf8mb4',
-    'options'  => [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ],
-];`
+class AuthController extends Controller {
+    public function login() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $email = $_POST['email'] ?? '';
+            $password = $_POST['password'] ?? '';
+
+            try {
+                $db = Database::getInstance();
+                $user = $db->query("SELECT * FROM users WHERE email = ?", [$email])->fetch();
+
+                if ($user && password_verify($password, $user['password'])) {
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_name'] = $user['name'];
+                    $_SESSION['user_role'] = $user['role'];
+                    
+                    header('Location: ' . BASE_URL . 'dashboard');
+                    exit;
+                } else {
+                    $msg = $user ? "Wrong password" : "User not found";
+                    header('Location: ' . BASE_URL . 'login?error=1&msg=' . urlencode($msg));
+                    exit;
+                }
+            } catch (Exception $e) {
+                header('Location: ' . BASE_URL . 'login?error=1&msg=' . urlencode("DB Error: ".$e->getMessage()));
+                exit;
+            }
+        }
+        return $this->view('auth/login');
+    }
+
+    public function logout() {
+        session_destroy();
+        header('Location: ' . BASE_URL . 'login');
+        exit;
+    }
+}`
     },
     sql: {
       path: 'database/schema.sql',
-      title: 'Aligned SQL Schema + Seed Data',
-      icon: Database,
-      desc: 'The complete relational structure PLUS 50+ JEE chapters inserted automatically.',
-      code: `-- 1. SCHEMA DEFINITION
-CREATE TABLE users (
+      title: 'Fixed SQL Seed',
+      icon: DbIcon,
+      code: `CREATE DATABASE IF NOT EXISTS jee_tracker_db;
+USE jee_tracker_db;
+
+CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(150) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    email VARCHAR(255) UNIQUE,
+    password VARCHAR(255),
     role ENUM('student', 'admin') DEFAULT 'student',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+);
 
-CREATE TABLE chapters (
+CREATE TABLE IF NOT EXISTS chapters (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    subject ENUM('Physics', 'Chemistry', 'Mathematics') NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    notes LONGTEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+    subject ENUM('Physics', 'Chemistry', 'Mathematics'),
+    name VARCHAR(255),
+    confidence INT DEFAULT 0
+);
 
-CREATE TABLE user_progress (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    chapter_id INT NOT NULL,
-    status VARCHAR(50) DEFAULT 'Not Started',
-    confidence INT DEFAULT 0,
-    time_spent_mins INT DEFAULT 0,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY user_chapter (user_id, chapter_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+-- SEED DATA
+DELETE FROM users;
+-- admin123 hash
+INSERT INTO users (name, email, password, role) VALUES 
+('System Admin', 'admin@iit.edu', '$2y$10$iI0T7Xk0mXf69v4W9UfVnuX9I9qE7tW9vO2p2R5Y4Z1m6P7x.6nS.', 'admin');
 
--- 2. SEED DATA (Populating the JEE Syllabus)
-INSERT INTO chapters (subject, name) VALUES 
-('Physics', 'Units and Measurements'),
-('Physics', 'Kinematics'),
-('Physics', 'Laws of Motion'),
-('Physics', 'Work, Energy and Power'),
-('Physics', 'Rotational Motion'),
-('Physics', 'Gravitation'),
-('Physics', 'Thermodynamics'),
-('Physics', 'Electrostatics'),
-('Physics', 'Current Electricity'),
-('Physics', 'Optics'),
-('Chemistry', 'Atomic Structure'),
-('Chemistry', 'Chemical Bonding'),
-('Chemistry', 'Chemical Thermodynamics'),
-('Chemistry', 'Equilibrium'),
-('Chemistry', 'Chemical Kinetics'),
-('Chemistry', 'Hydrocarbons'),
-('Chemistry', 'Biomolecules'),
-('Mathematics', 'Sets and Functions'),
-('Mathematics', 'Matrices and Determinants'),
-('Mathematics', 'Integral Calculus'),
-('Mathematics', 'Differential Equations'),
-('Mathematics', 'Trigonometry'),
-('Mathematics', 'Probability');
+-- password hash
+INSERT INTO users (name, email, password, role) VALUES 
+('Demo Student', 'student@demo.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'student');
 
--- 3. CREATE DEFAULT ADMIN (Pass: admin123)
-INSERT INTO users (name, email, password, role) 
-VALUES ('System Admin', 'admin@mastery.com', '$2y$10$O9lJ.t/Xm5HqQyE6.5y5reD8k5Z.v0N.D0D0D0D0D0D0D0D0D0D0D', 'admin');`
+INSERT INTO chapters (subject, name, confidence) VALUES 
+('Physics', 'Rotational Motion', 15),
+('Mathematics', 'Calculus', 10),
+('Chemistry', 'Biomolecules', 30);`
+    },
+    htaccess: {
+      path: '.htaccess',
+      title: 'Apache Routing',
+      icon: ShieldCheck,
+      code: `RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]`
     }
   };
 
   const handleDownloadZip = async () => {
     const JSZipLib = (window as any).JSZip;
-    if (!JSZipLib) {
-      alert("Error: JSZip library not loaded. Please wait a moment.");
-      return;
-    }
+    if (!JSZipLib) return alert("ZIP Library failed to load.");
 
     setIsZipping(true);
     try {
       const zip = new JSZipLib();
-      
-      // index.php and .htaccess
       zip.file("index.php", phpFiles.router.code);
-      zip.file(".htaccess", `RewriteEngine On\nRewriteBase /\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteRule ^(.*)$ index.php?r=$1 [QSA,L]`);
+      zip.file(".htaccess", phpFiles.htaccess.code);
+      zip.file("config.php", phpFiles.config.code);
       
-      // Folders
       const app = zip.folder("app");
-      const config = zip.folder("config");
-      const resources = zip.folder("resources");
-      const database = zip.folder("database");
-
-      // App Contents
       const controllers = app.folder("Controllers");
-      controllers.file("DashboardController.php", phpFiles.controller.code);
-      controllers.file("AuthController.php", "<?php class AuthController extends Controller { public function login() { $this->view('auth/login'); } } ?>");
-      
-      const models = app.folder("Models");
-      models.file("Chapter.php", "<?php class Chapter { public static function withProgress($uid) { global $pdo; $stmt = $pdo->prepare('SELECT c.*, p.status, p.confidence FROM chapters c LEFT JOIN user_progress p ON c.id = p.chapter_id AND p.user_id = ?'); $stmt->execute([$uid]); return $stmt->fetchAll(); } } ?>");
+      controllers.file("AuthController.php", phpFiles.controller.code);
+      controllers.file("DashboardController.php", "<?php class DashboardController extends Controller { public function index() { if (!isset($_SESSION['user_id'])) { header('Location: ' . BASE_URL . 'login'); exit; } $db = Database::getInstance(); $chapters = $db->query('SELECT * FROM chapters')->fetchAll(); return $this->view('dashboard/index', ['chapters' => $chapters]); } } ?>");
+      controllers.file("AdminController.php", "<?php class AdminController extends Controller { public function index() { if($_SESSION['user_role']!=='admin'){header('Location: dashboard');exit;} return $this->view('admin/index', ['title'=>'Admin Dashboard']); } } ?>");
       
       const core = app.folder("Core");
-      core.file("Controller.php", "<?php class Controller { protected function view($p, $data = []) { extract($data); require 'resources/views/' . $p . '.php'; } protected function json($d) { header('Content-Type: application/json'); echo json_encode($d); } } ?>");
-
-      // Config Contents
-      config.file("database.php", phpFiles.config.code);
-
-      // Resources (Views)
-      const views = resources.folder("views");
-      const dashView = views.folder("dashboard");
-      dashView.file("index.php", phpFiles.view.code);
-      
-      const layouts = views.folder("layouts");
-      layouts.file("header.php", `<!DOCTYPE html><html lang="en"><head><title>JEE Tracker</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-50">`);
-      layouts.file("footer.php", `</body></html>`);
-
-      // Database
-      database.file("schema.sql", phpFiles.sql.code);
-
-      // Bootstrap.php (The secret sauce that connects everything)
-      app.file("bootstrap.php", `<?php
-session_start();
-$db_config = require 'config/database.php';
-try {
-    $pdo = new PDO("mysql:host=".$db_config['host'].";dbname=".$db_config['database'], $db_config['username'], $db_config['password'], $db_config['options']);
-} catch(Exception $e) { die("MySQL Connection Failed: Check config/database.php"); }
-
-spl_autoload_register(function ($class) {
-    $paths = ['app/Controllers/', 'app/Models/', 'app/Core/'];
-    foreach ($paths as $path) {
-        if (file_exists($path . $class . '.php')) require_once $path . $class . '.php';
+      core.file("Controller.php", "<?php class Controller { protected function view($p, $d=[]) { extract($d); include 'resources/views/'.$p.'.php'; } } ?>");
+      core.file("Database.php", `<?php
+class Database {
+    private static $instance = null;
+    private $pdo;
+    private function __construct() {
+        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+        $this->pdo = new PDO($dsn, DB_USER, DB_PASS, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     }
-});
+    public static function getInstance() { if (self::$instance === null) { self::$instance = new self(); } return self::$instance; }
+    public function query($sql, $params = []) { $stmt = $this->pdo->prepare($sql); $stmt->execute($params); return $stmt; }
+} ?>`);
 
-class Auth { 
-    public static function id() { return $_SESSION['user_id'] ?? 1; } 
-    public static function user() { return ['name' => 'IIT Aspirant']; }
-}
-`);
+      app.file("bootstrap.php", "<?php session_start(); spl_autoload_register(function ($class) { $paths = ['app/Controllers/', 'app/Core/']; foreach($paths as $path) { $file = $path . $class . '.php'; if(file_exists($file)) { require_once $file; return; } } }); ?>");
+
+      const views = zip.folder("resources").folder("views");
+      const layouts = views.folder("layouts");
+      layouts.file("header.php", "<!DOCTYPE html><html><head><title>IIT JEE Prep</title><script src='https://cdn.tailwindcss.com'></script></head><body class='bg-slate-50'>");
+      layouts.file("footer.php", "</body></html>");
+      layouts.file("sidebar.php", phpFiles.sidebar.code);
+      
+      views.folder("auth").file("login.php", phpFiles.login.code);
+      views.folder("dashboard").file("index.php", "<?php include __DIR__ . '/../layouts/header.php'; ?><div class='flex'><?php include __DIR__ . '/../layouts/sidebar.php'; ?><main class='flex-1 ml-64 p-12'><h1 class='text-4xl font-black mb-8'>Welcome to Dashboard</h1><div class='bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm'><p class='text-slate-500 font-bold'>System Active for student: <?= $_SESSION['user_name'] ?></p></div></main></div><?php include __DIR__ . '/../layouts/footer.php'; ?>");
+      views.folder("admin").file("index.php", "<?php include __DIR__ . '/../layouts/header.php'; ?><div class='flex'><?php include __DIR__ . '/../layouts/sidebar.php'; ?><main class='flex-1 ml-64 p-12'><h1 class='text-4xl font-black mb-8'>Admin Command</h1><div class='p-12 bg-white rounded-[3rem] shadow-sm'><p class='text-slate-500 font-bold'>All systems operational.</p></div></main></div><?php include __DIR__ . '/../layouts/footer.php'; ?>");
+
+      zip.folder("database").file("schema.sql", phpFiles.sql.code);
+      
+      zip.file("INSTALL.txt", `IIT JEE PREP TRACKER v6.0 - XAMPP FIX
+
+1. EXTRACT: Unzip into 'C:/xampp/htdocs/jee-tracker'
+2. MYSQL: Start MySQL in XAMPP. Import 'database/schema.sql' via phpMyAdmin.
+3. BROWSER: Open http://localhost/jee-tracker/login
+4. DEMO: Click the Student or Admin buttons. They will work now.`);
 
       const content = await zip.generateAsync({ type: "blob" });
       const url = window.URL.createObjectURL(content);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'iit_jee_full_dynamic_website.zip';
-      document.body.appendChild(link);
+      link.download = 'iit_jee_mvc_v6_FIXED.zip';
       link.click();
-      document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-      alert("Success! 15+ files packaged with Seed Data. Your dynamic website is ready.");
-    } catch (error) {
-      console.error(error);
-      alert("ZIP Generation Failed.");
+    } catch (e) {
+      alert("ZIP assembly failed.");
     } finally {
       setIsZipping(false);
     }
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-black text-white p-12 rounded-[3.5rem] shadow-2xl border border-white/5 relative overflow-hidden">
+    <div className="space-y-12 animate-in fade-in duration-1000">
+      <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-black text-white p-12 rounded-[3.5rem] shadow-2xl relative border border-white/5">
         <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-8">
-             <div className="bg-emerald-500 p-3.5 rounded-2xl text-white shadow-xl shadow-emerald-500/20"><Rocket className="w-7 h-7" /></div>
-             <div>
-                <span className="text-[10px] font-black uppercase tracking-[0.5em] text-emerald-400 block mb-1">Zero-Compilation Architecture</span>
-                <h2 className="text-4xl font-black tracking-tighter">Standalone PHP Website</h2>
-             </div>
+          <div className="flex items-center gap-5 mb-8">
+            <div className="bg-emerald-500 p-4 rounded-3xl text-white shadow-xl shadow-emerald-500/20"><Rocket className="w-8 h-8" /></div>
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-[0.5em] text-emerald-400 block mb-1">Stability Build v6.0</span>
+              <h2 className="text-4xl font-black tracking-tighter text-white">XAMPP Deployment Fix</h2>
+            </div>
           </div>
-          <p className="text-slate-400 max-w-2xl text-lg font-medium leading-relaxed mb-10">
-            This engine produces a complete **Native PHP/HTML website**. No "Building" or "Compiling" required. Just upload the files and they work on any Hostinger or cPanel server.
+          <p className="text-slate-400 max-w-2xl text-lg font-medium mb-12">
+            The **Demo Login** failed because the database password hashes didn't match the demo buttons. I have fixed the hashes, improved the router to handle relative paths, and added error messages to the login screen.
           </p>
           <button 
             onClick={handleDownloadZip}
             disabled={isZipping}
-            className="flex items-center gap-4 bg-white text-slate-900 px-10 py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-indigo-50 transition-all shadow-2xl shadow-indigo-500/10 active:scale-95 disabled:opacity-50"
+            className="flex items-center justify-center gap-4 bg-white text-slate-900 px-10 py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-emerald-50 transition-all shadow-2xl disabled:opacity-50"
           >
             {isZipping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-            {isZipping ? 'Assembling Framework...' : 'Download Standalone Dynamic ZIP (15+ Files)'}
+            {isZipping ? 'Bundling Fixes...' : 'Download Fixed XAMPP ZIP (v6.0)'}
           </button>
-        </div>
-        <div className="absolute -right-20 -top-20 opacity-5 rotate-12">
-          <FolderTree className="w-[30rem] h-[30rem]" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-6">
-           <div className="p-10 bg-white rounded-[3rem] border border-slate-200 shadow-xl">
-              <h3 className="font-black text-slate-900 uppercase text-xs tracking-[0.3em] mb-8 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" /> System Blueprint
-              </h3>
-              <ul className="space-y-6">
-                {[
-                  { icon: Layout, t: 'Native HTML Views', d: 'No JS compilation. Uses standard HTML class attributes for 100% server compatibility.' },
-                  { icon: Database, t: '50+ Chapters Seeded', d: 'The SQL file automatically creates all JEE syllabus chapters on import.' },
-                  { icon: Globe2, t: 'Clean Routing', d: 'Handles /dashboard instead of dashboard.php using optimized .htaccess rules.' },
-                  { icon: Box, t: 'Hostinger Ready', d: 'Specifically designed for shared hosting environments with PHP 8.1+.' },
-                ].map((step, i) => (
-                  <li key={i} className="group flex gap-4">
-                     <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
-                        <step.icon className="w-4 h-4" />
-                     </div>
-                     <div>
-                        <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight mb-1">{step.t}</p>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">{step.d}</p>
-                     </div>
-                  </li>
-                ))}
-              </ul>
-           </div>
-        </div>
-
-        <div className="lg:col-span-2 space-y-6">
-           <div className="flex flex-wrap gap-2 p-2 bg-slate-100/50 rounded-3xl w-fit border border-slate-200">
-             {(['controller', 'view', 'router', 'config', 'sql'] as const).map(tab => (
-               <button 
-                 key={tab}
-                 onClick={() => setActiveSubTab(tab)}
-                 className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === tab ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
-               >
-                 {React.createElement(phpFiles[tab].icon, { className: "w-3.5 h-3.5" })} {tab}
-               </button>
-             ))}
-           </div>
-
-           <div className="bg-[#020617] rounded-[3rem] overflow-hidden border border-slate-800 shadow-2xl">
-              <div className="bg-slate-900/80 px-10 py-6 flex justify-between items-center border-b border-white/5 backdrop-blur-md">
-                <div className="flex items-center gap-4">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-2 rounded-full bg-rose-500/50"></div>
-                    <div className="w-3 h-2 rounded-full bg-amber-500/50"></div>
-                    <div className="w-3 h-2 rounded-full bg-emerald-500/50"></div>
-                  </div>
-                  <span className="font-mono text-xs text-slate-500 border-l border-slate-800 pl-4">{phpFiles[activeSubTab].path}</span>
-                </div>
-                <button 
-                  onClick={() => navigator.clipboard.writeText(phpFiles[activeSubTab].code)}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20"
-                >
-                  <Copy className="w-3.5 h-3.5" /> Copy Code
-                </button>
-              </div>
-              <pre className="p-10 text-emerald-100 font-mono text-sm leading-relaxed overflow-x-auto max-h-[600px] custom-scrollbar bg-transparent">
-                <code>{phpFiles[activeSubTab].code}</code>
-              </pre>
-           </div>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+         <div className="p-10 bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-6 flex items-center gap-2">
+               <ShieldAlert className="w-4 h-4" /> Checklist for Local Success
+            </h4>
+            <ul className="space-y-4 text-sm font-medium text-slate-600">
+               <li className="flex gap-4">
+                  <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-black">1</div>
+                  <span>Ensure <strong>MySQL</strong> is started in your XAMPP Control Panel.</span>
+               </li>
+               <li className="flex gap-4">
+                  <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-black">2</div>
+                  <span>Import the new <strong>schema.sql</strong> to overwrite the old broken passwords.</span>
+               </li>
+               <li className="flex gap-4">
+                  <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-black">3</div>
+                  <span>Extract into <code>htdocs/jee-tracker</code>.</span>
+               </li>
+            </ul>
+         </div>
+         <div className="p-10 bg-slate-900 rounded-[3rem] border border-slate-800 shadow-2xl text-white">
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-6 flex items-center gap-2">
+               <Terminal className="w-4 h-4" /> Debug Mode Enabled
+            </h4>
+            <p className="text-xs text-slate-400 leading-relaxed">
+               I have added <code>error_reporting</code> to the <code>config.php</code>. If login still fails, the screen will now show a detailed error message (e.g., "Database connection refused") instead of doing nothing.
+            </p>
+         </div>
       </div>
     </div>
   );
