@@ -17,6 +17,7 @@ export interface User {
   recoveryHint?: string; // For password recovery simulation
   role: UserRole;
   joined: string;
+  status?: 'active' | 'blocked'; // New: Support for user management
 }
 
 export interface SystemLog {

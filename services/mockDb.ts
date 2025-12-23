@@ -26,7 +26,8 @@ class MockDB {
       password: 'admin',
       recoveryHint: 'system_root',
       role: 'admin',
-      joined: new Date().toISOString()
+      joined: new Date().toISOString(),
+      status: 'active'
     };
 
     const demoStudent: User = {
@@ -36,7 +37,8 @@ class MockDB {
       password: 'password',
       recoveryHint: 'demo',
       role: 'student',
-      joined: new Date().toISOString()
+      joined: new Date().toISOString(),
+      status: 'active'
     };
 
     const globalChapters = INITIAL_CHAPTERS.map(c => ({ ...c }));
@@ -132,6 +134,7 @@ class MockDB {
       const db = MockDB.getDB();
       const user = db.users.find((u: User) => u.email === email && u.password === pass);
       if (user) {
+        if (user.status === 'blocked') return "Your account has been blocked by an administrator.";
         db.currentUser = user;
         MockDB.saveDB(db);
         MockDB.log(`User Logged In: ${email}`);
@@ -142,7 +145,16 @@ class MockDB {
     register: (name: string, email: string, pass: string, hint: string): User | string => {
       const db = MockDB.getDB();
       if (db.users.find((u: User) => u.email === email)) return "User already exists.";
-      const newUser: User = { id: `user_${Date.now()}`, name, email, password: pass, recoveryHint: hint, role: 'student', joined: new Date().toISOString() };
+      const newUser: User = { 
+        id: `user_${Date.now()}`, 
+        name, 
+        email, 
+        password: pass, 
+        recoveryHint: hint, 
+        role: 'student', 
+        joined: new Date().toISOString(),
+        status: 'active'
+      };
       db.users.push(newUser);
       const userChapters = db.globalChapters.map((c: any) => ({ ...c, id: `${newUser.id}_${c.id}`, userId: newUser.id, questions: [] }));
       db.userChapters = [...(db.userChapters || []), ...userChapters];
@@ -150,11 +162,11 @@ class MockDB {
       MockDB.saveDB(db);
       return newUser;
     },
-    // Fix: Added missing recover method for password reset simulation
     recover: (email: string, hint: string, newPass: string): string => {
       const db = MockDB.getDB();
       const userIndex = db.users.findIndex((u: User) => u.email === email && u.recoveryHint === hint);
       if (userIndex !== -1) {
+        if (db.users[userIndex].status === 'blocked') return "This account is blocked.";
         db.users[userIndex].password = newPass;
         MockDB.saveDB(db);
         MockDB.log(`Password Recovered for: ${email}`);
@@ -246,7 +258,46 @@ class MockDB {
   };
 
   static admin = {
-    getAllUsers: (): User[] => MockDB.getDB().users.filter((u: User) => u.role === 'student'),
+    getAllUsers: (): User[] => MockDB.getDB().users,
+    addUser: (user: Omit<User, 'id' | 'joined' | 'status'>): User => {
+      const db = MockDB.getDB();
+      const newUser: User = {
+        ...user,
+        id: `user_${Date.now()}`,
+        joined: new Date().toISOString(),
+        status: 'active'
+      };
+      db.users.push(newUser);
+      
+      // If student, initialize chapters
+      if (newUser.role === 'student') {
+        const userChapters = db.globalChapters.map((c: any) => ({ 
+          ...c, 
+          id: `${newUser.id}_${c.id}`, 
+          userId: newUser.id, 
+          questions: [] 
+        }));
+        db.userChapters = [...(db.userChapters || []), ...userChapters];
+      }
+      
+      MockDB.saveDB(db);
+      MockDB.log(`Admin created user: ${user.email}`);
+      return newUser;
+    },
+    deleteUser: (id: string) => {
+      const db = MockDB.getDB();
+      db.users = db.users.filter((u: User) => u.id !== id);
+      db.userChapters = db.userChapters.filter((c: Chapter) => c.userId !== id);
+      db.tests = db.tests.filter((t: MockTest) => t.userId !== id);
+      MockDB.saveDB(db);
+      MockDB.log(`Admin deleted user: ${id}`);
+    },
+    updateUser: (id: string, updates: Partial<User>) => {
+      const db = MockDB.getDB();
+      db.users = db.users.map((u: User) => u.id === id ? { ...u, ...updates } : u);
+      MockDB.saveDB(db);
+      MockDB.log(`Admin updated user: ${id}`);
+    },
     getLogs: (): SystemLog[] => MockDB.getDB().logs,
     getSystemStats: () => {
       const db = MockDB.getDB();
