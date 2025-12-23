@@ -1,10 +1,10 @@
 
-import { Chapter, MockTest, User, UserRole, MasterMockTest, SystemLog, Question, AIModelConfig } from '../types';
+import { Chapter, MockTest, User, UserRole, MasterMockTest, SystemLog, Question } from '../types';
 import { INITIAL_CHAPTERS } from '../constants';
 
 class MockDB {
-  private static STORAGE_KEY = 'jee_mastery_db_v8_ai_config';
-  private static SCHEMA_VERSION = '1.4';
+  private static STORAGE_KEY = 'jee_mastery_db_v9_local_logic';
+  private static SCHEMA_VERSION = '1.5';
 
   private static getDB() {
     const data = localStorage.getItem(this.STORAGE_KEY);
@@ -62,7 +62,7 @@ class MockDB {
         id: 'L1',
         userId: 'system',
         userName: 'System',
-        action: 'Database Initialized and Seeded',
+        action: 'Database Initialized (Local Logic Mode)',
         timestamp: new Date().toISOString(),
         level: 'info'
       }],
@@ -76,13 +76,13 @@ class MockDB {
         }
       ],
       systemConfig: {
-        activeModelId: 'gemini-3-flash',
+        defaultIntensity: 'medium',
         modelMetrics: [
-          { date: '01/05', accuracy: 88, latency: 1.2 },
-          { date: '02/05', accuracy: 89, latency: 1.1 },
-          { date: '03/05', accuracy: 87, latency: 1.4 },
-          { date: '04/05', accuracy: 91, latency: 0.9 },
-          { date: '05/05', accuracy: 92, latency: 0.8 },
+          { date: '01/05', accuracy: 100, latency: 0 },
+          { date: '02/05', accuracy: 100, latency: 0 },
+          { date: '03/05', accuracy: 100, latency: 0 },
+          { date: '04/05', accuracy: 100, latency: 0 },
+          { date: '05/05', accuracy: 100, latency: 0 },
         ]
       },
       currentUser: null
@@ -95,8 +95,8 @@ class MockDB {
     const migrated = {
       ...oldDb,
       version: this.SCHEMA_VERSION,
-      systemConfig: oldDb.systemConfig || {
-        activeModelId: 'gemini-3-flash',
+      systemConfig: {
+        defaultIntensity: 'medium',
         modelMetrics: []
       }
     };
@@ -237,7 +237,6 @@ class MockDB {
       const db = MockDB.getDB();
       db.masterMocks = db.masterMocks.filter((m: MasterMockTest) => m.id !== id);
       MockDB.saveDB(db);
-      MockDB.log(`Admin decommissioned test: ${id}`);
     },
     create: (test: MockTest) => {
       const db = MockDB.getDB();
@@ -259,7 +258,6 @@ class MockDB {
       const db = MockDB.getDB();
       db.systemConfig = { ...db.systemConfig, ...config };
       MockDB.saveDB(db);
-      MockDB.log(`System Configuration Updated`);
     }
   };
 
@@ -274,35 +272,18 @@ class MockDB {
         status: 'active'
       };
       db.users.push(newUser);
-      
-      // If student, initialize chapters
-      if (newUser.role === 'student') {
-        const userChapters = db.globalChapters.map((c: any) => ({ 
-          ...c, 
-          id: `${newUser.id}_${c.id}`, 
-          userId: newUser.id, 
-          questions: [] 
-        }));
-        db.userChapters = [...(db.userChapters || []), ...userChapters];
-      }
-      
       MockDB.saveDB(db);
-      MockDB.log(`Admin created user: ${user.email}`);
       return newUser;
     },
     deleteUser: (id: string) => {
       const db = MockDB.getDB();
       db.users = db.users.filter((u: User) => u.id !== id);
-      db.userChapters = db.userChapters.filter((c: Chapter) => c.userId !== id);
-      db.tests = db.tests.filter((t: MockTest) => t.userId !== id);
       MockDB.saveDB(db);
-      MockDB.log(`Admin deleted user: ${id}`);
     },
     updateUser: (id: string, updates: Partial<User>) => {
       const db = MockDB.getDB();
       db.users = db.users.map((u: User) => u.id === id ? { ...u, ...updates } : u);
       MockDB.saveDB(db);
-      MockDB.log(`Admin updated user: ${id}`);
     },
     getLogs: (): SystemLog[] => MockDB.getDB().logs,
     getSystemStats: () => {

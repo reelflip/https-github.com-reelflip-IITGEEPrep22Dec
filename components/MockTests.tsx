@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { MockTest, Chapter, MasterMockTest, Question } from '../types';
-import { Plus, Trash2, TrendingUp, Info, Sparkles, Loader2, X, BrainCircuit, BarChart, PlayCircle, Clock, BookOpen } from 'lucide-react';
-import { analyzeMockPerformance } from '../services/geminiService';
+import { Plus, Trash2, TrendingUp, Info, Sparkles, Loader2, X, BrainCircuit, BarChart, PlayCircle, Clock, BookOpen, Timer, Zap, ChevronDown, CheckSquare } from 'lucide-react';
+import { analyzeMockPerformance, PerformanceAnalysis } from '../services/geminiService';
 import MockDB from '../services/mockDb';
 import ExamRunner from './ExamRunner';
 
@@ -16,7 +16,7 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
   const [showForm, setShowForm] = useState(false);
   const [activeExam, setActiveExam] = useState<{mock: MasterMockTest, questions: Question[]} | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<{ id: string, text: string } | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{ id: string, report: PerformanceAnalysis } | null>(null);
   const [formData, setFormData] = useState({ name: '', physics: 0, chemistry: 0, maths: 0 });
 
   const globalQuestions = MockDB.questions.all();
@@ -30,7 +30,6 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Ensure all scores are numbers and consistent details are logged
     const physics = Number(formData.physics) || 0;
     const chemistry = Number(formData.chemistry) || 0;
     const maths = Number(formData.maths) || 0;
@@ -46,6 +45,7 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
       mathsScore: maths,
       totalScore: totalScore,
       outOf: 300,
+      timeTakenSeconds: 0, // Manual entries don't have precise timing
       isAutomated: false
     };
 
@@ -57,8 +57,14 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
   const handleAnalyze = async (test: MockTest) => {
     setAnalyzingId(test.id);
     const result = await analyzeMockPerformance(test, MockDB.chapters.all());
-    setAnalysisResult({ id: test.id, text: result || "Unable to analyze at this moment." });
+    setAnalysisResult({ id: test.id, report: result });
     setAnalyzingId(null);
+  };
+
+  const formatSeconds = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${s}s`;
   };
 
   if (activeExam) {
@@ -126,10 +132,25 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
 
         <div className="grid grid-cols-1 gap-4">
           {tests.map(test => (
-            <div key={test.id} className="glass-card p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row gap-6 relative group bg-white hover:border-indigo-200 transition-all">
+            <div key={test.id} className="glass-card p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-6 relative group bg-white hover:border-indigo-200 transition-all">
               <div className="flex-1 space-y-4">
                 <div className="flex justify-between items-start">
-                  <div><h4 className="font-bold text-slate-800 text-lg leading-tight">{test.name}</h4><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{test.date} • {test.isAutomated ? 'SYSTEM EVALUATED' : 'OFFLINE ENTRY'}</p></div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-lg leading-tight">{test.name}</h4>
+                    <div className="flex items-center gap-3 mt-1">
+                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{test.date}</span>
+                       <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                       <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">{test.isAutomated ? 'SYSTEM EVALUATED' : 'OFFLINE ENTRY'}</span>
+                       {test.timeTakenSeconds ? (
+                         <>
+                           <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                           <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                             <Timer className="w-3 h-3" /> {formatSeconds(test.timeTakenSeconds)}
+                           </span>
+                         </>
+                       ) : null}
+                    </div>
+                  </div>
                   <div className="text-right"><div className="text-3xl font-black text-indigo-600 leading-none">{test.totalScore}</div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">/ {test.outOf} MARKS</div></div>
                 </div>
                 <div className="grid grid-cols-3 gap-6">
@@ -146,14 +167,60 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => handleAnalyze(test)} className="flex items-center gap-2 px-5 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-colors">
-                    {analyzingId === test.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} AI Deep Analysis
+                    {analyzingId === test.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />} Deep Analysis
                   </button>
                   <button onClick={() => removeTest(test.id)} className="p-2 text-slate-200 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
                 </div>
+                
                 {analysisResult && analysisResult.id === test.id && (
-                  <div className="mt-4 p-6 bg-slate-900 text-indigo-100 rounded-3xl border border-slate-800 text-sm animate-in slide-in-from-top-2">
-                    <div className="flex items-center justify-between mb-3"><span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] flex items-center gap-2"><BrainCircuit className="w-3 h-3" /> Gemini Evaluation</span><X className="w-4 h-4 cursor-pointer text-slate-500 hover:text-white" onClick={() => setAnalysisResult(null)} /></div>
-                    <p className="opacity-90 leading-relaxed italic">"{analysisResult.text}"</p>
+                  <div className="mt-4 p-8 bg-slate-900 text-indigo-100 rounded-[2.5rem] border border-slate-800 text-sm animate-in slide-in-from-top-2 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-5">
+                      <BrainCircuit className="w-32 h-32" />
+                    </div>
+                    
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center font-black">
+                            {analysisResult.report.persona.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] flex items-center gap-2">Logic Assistant Engine</span>
+                            <h5 className="text-xl font-bold text-white tracking-tight">{analysisResult.report.persona}</h5>
+                          </div>
+                        </div>
+                        <X className="w-6 h-6 cursor-pointer text-slate-500 hover:text-white" onClick={() => setAnalysisResult(null)} />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                           <div>
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Subject Insight</label>
+                              <p className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: analysisResult.report.subjectInsights.replace(/\*\*(.*?)\*\*/g, '<b class="text-white">$1</b>') }} />
+                           </div>
+                           <div className="flex gap-4">
+                              <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5">
+                                 <span className="text-[9px] font-black text-slate-500 uppercase block mb-1">Accuracy</span>
+                                 <span className="text-xl font-black text-emerald-400">{analysisResult.report.accuracy}%</span>
+                              </div>
+                              <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5">
+                                 <span className="text-[9px] font-black text-slate-500 uppercase block mb-1">Speed</span>
+                                 <span className="text-xs font-black text-indigo-400 truncate block">{analysisResult.report.speedRating}</span>
+                              </div>
+                           </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Actionable Roadmap</label>
+                           {analysisResult.report.recommendations.map((rec, i) => (
+                             <div key={i} className="flex gap-3 items-start p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                                <CheckSquare className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                <span className="text-xs text-slate-300 font-medium">{rec}</span>
+                             </div>
+                           ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

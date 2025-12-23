@@ -6,20 +6,12 @@ import {
   ClipboardCheck, Database, Zap, Cpu, Search, Trash2, Tag, 
   CheckCircle, Clock, Save, FilePlus, BrainCircuit, Activity, 
   LineChart as LucideLineChart, MousePointer2, X, ShieldAlert, 
-  UserPlus, Lock, Unlock, Edit3, Filter, Rocket, AlertTriangle
+  UserPlus, Lock, Unlock, Edit3, Filter, Rocket, AlertTriangle,
+  Cog, Gauge
 } from 'lucide-react';
 import { Subject, ChapterStatus, Question, MasterMockTest, AIModelConfig, User, UserRole } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import SubjectTracker from './SubjectTracker';
-
-const AI_MODELS: AIModelConfig[] = [
-  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', tag: 'SPEED (FREE)', description: 'Ultra-fast, optimized for quick doubts and scheduling.', type: 'speed', internalId: 'gemini-3-flash-preview' },
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', tag: 'REASONING', description: 'Deep reasoning and complex Physics problem solving.', type: 'reasoning', internalId: 'gemini-3-pro-preview' },
-  { id: 'llama-3-1', name: 'Llama 3.1 (70B)', tag: 'GENERAL', description: 'Versatile model with great theory explanation capabilities.', type: 'general', internalId: 'gemini-3-flash-preview' },
-  { id: 'deepseek-v3', name: 'DeepSeek V3', tag: 'LOGIC', description: 'Logic-heavy model, excellent for Inorganic Chemistry facts.', type: 'logic', internalId: 'gemini-3-pro-preview' },
-  { id: 'qwen-math', name: 'Qwen 2.5 Math', tag: 'MATH', description: 'Specialized for high-level Mathematics and Calculus.', type: 'math', internalId: 'gemini-3-pro-preview' },
-  { id: 'mistral-large', name: 'Mistral Large', tag: 'BALANCED', description: 'Balanced performance for general guidance and motivation.', type: 'balanced', internalId: 'gemini-3-pro-preview' },
-];
 
 interface AdminPanelProps {
   initialTab: 'stats' | 'curriculum' | 'questions' | 'admin-tests' | 'ai-config' | 'users';
@@ -72,9 +64,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
   const [mockDuration, setMockDuration] = useState(180);
   const [selectedQIds, setSelectedQIds] = useState<Set<string>>(new Set());
 
-  // --- Handlers ---
-  const handleModelChange = (id: string) => {
-    MockDB.config.set({ activeModelId: id });
+  const handleIntensityDefaultChange = (intensity: string) => {
+    MockDB.config.set({ defaultIntensity: intensity });
     refreshPanel();
   };
 
@@ -160,18 +151,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
     setSelectedQIds(next);
   };
 
-  const getTagColor = (type: string) => {
-    switch (type) {
-      case 'speed': return 'bg-blue-50 text-blue-600 border-blue-100';
-      case 'reasoning': return 'bg-purple-50 text-purple-600 border-purple-100';
-      case 'general': return 'bg-violet-50 text-violet-600 border-violet-100';
-      case 'logic': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
-      case 'math': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-      case 'balanced': return 'bg-orange-50 text-orange-600 border-orange-100';
-      default: return 'bg-slate-50 text-slate-600 border-slate-100';
-    }
-  };
-
   const renderSectionHeader = (title: string, subtitle: string) => (
     <div className="mb-10">
       <h2 className="text-4xl font-black text-slate-900 tracking-tighter leading-none mb-3">{title}</h2>
@@ -205,33 +184,47 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
 
       {initialTab === 'ai-config' && (
         <div className="space-y-8">
-          {renderSectionHeader('Intelligence Orchestration', 'Assign specialized LLMs to various cognitive tasks within the student portal.')}
+          {renderSectionHeader('System Settings', 'Configure the local Smart Logic engine behavior and global defaults.')}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-5">
-              <h3 className="font-black text-slate-800 uppercase tracking-widest text-[10px] flex items-center gap-2"><BrainCircuit className="w-4 h-4 text-indigo-600" /> Select Engine Node</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {AI_MODELS.map((model) => (
-                  <button key={model.id} onClick={() => handleModelChange(model.id)} className={`p-7 rounded-[2.5rem] border-2 text-left transition-all hover:shadow-xl group ${systemConfig.activeModelId === model.id ? 'border-indigo-500 bg-indigo-50/40 ring-4 ring-indigo-50' : 'border-slate-100 bg-white'}`}>
-                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-[8px] font-black tracking-[0.2em] border mb-4 ${getTagColor(model.type)}`}>{model.tag}</div>
-                    <h4 className="font-black text-slate-900 text-xl mb-2 leading-none group-hover:text-indigo-600 transition-colors">{model.name}</h4>
-                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-3">{model.description}</p>
-                  </button>
-                ))}
+              <h3 className="font-black text-slate-800 uppercase tracking-widest text-[10px] flex items-center gap-2"><Cog className="w-4 h-4 text-indigo-600" /> Assistant Defaults</h3>
+              <div className="glass-card p-10 rounded-[2.5rem] border border-slate-100 bg-white shadow-sm space-y-8">
+                <div>
+                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Global Intensity Limit</label>
+                   <div className="grid grid-cols-3 gap-3">
+                      {['low', 'medium', 'high'].map(intensity => (
+                        <button 
+                          key={intensity}
+                          onClick={() => handleIntensityDefaultChange(intensity)}
+                          className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${systemConfig.defaultIntensity === intensity ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-500 border-slate-100'}`}
+                        >
+                          {intensity}
+                        </button>
+                      ))}
+                   </div>
+                </div>
+                <div>
+                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Logic Engine Node</label>
+                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                      <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center"><Zap className="w-4 h-4" /></div>
+                      <span className="text-xs font-bold text-slate-600">Local Smart Logic v1.2 (Active)</span>
+                   </div>
+                </div>
               </div>
             </div>
             <div className="space-y-5">
-              <h3 className="font-black text-slate-800 uppercase tracking-widest text-[10px] flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-600" /> Inference Telemetry</h3>
+              <h3 className="font-black text-slate-800 uppercase tracking-widest text-[10px] flex items-center gap-2"><Gauge className="w-4 h-4 text-emerald-600" /> Platform Usage Analytics</h3>
               <div className="glass-card p-10 rounded-[2.5rem] border border-slate-100 bg-white h-full flex flex-col shadow-sm">
                 <div className="flex justify-between items-center mb-12">
-                  <div><p className="text-4xl font-black text-slate-900 tracking-tighter">92.4%</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confidence Score</p></div>
-                  <div className="text-right"><p className="text-4xl font-black text-emerald-600 tracking-tighter">0.8s</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inference Burst</p></div>
+                  <div><p className="text-4xl font-black text-slate-900 tracking-tighter">100%</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local Uptime</p></div>
+                  <div className="text-right"><p className="text-4xl font-black text-emerald-600 tracking-tighter">0.0ms</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Network Latency</p></div>
                 </div>
                 <div className="flex-1 h-64">
                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={systemConfig.modelMetrics}>
+                      <AreaChart data={systemConfig.modelMetrics || []}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="date" hide />
-                        <YAxis domain={[80, 100]} hide />
+                        <YAxis hide />
                         <Area type="monotone" dataKey="accuracy" stroke="#4f46e5" strokeWidth={3} fill="#4f46e5" fillOpacity={0.1} />
                       </AreaChart>
                    </ResponsiveContainer>
@@ -284,7 +277,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
         <div className="space-y-12">
           {renderSectionHeader('Test Factory', 'Architect and deploy Computer Based Tests to the entire student network.')}
           
-          {/* Section: Deployed Test Registry (The Fix) */}
           <section className="space-y-6">
             <div className="flex items-center gap-3 px-4">
               <Rocket className="w-5 h-5 text-indigo-600" />
@@ -318,7 +310,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
                         {mock.totalMarks} Marks
                       </span>
                    </div>
-                   <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/5 -mr-12 -mt-12 rounded-full" />
                 </div>
               )) : (
                 <div className="lg:col-span-3 py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center">
@@ -329,7 +320,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
             </div>
           </section>
 
-          {/* Section: Test Assembly Line */}
           <section className="space-y-6 pt-10 border-t border-slate-100">
             <div className="flex items-center gap-3 px-4 mb-4">
               <FilePlus className="w-5 h-5 text-indigo-600" />
@@ -433,59 +423,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modals */}
-      {showAddQuestion && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-3xl rounded-[3.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-10 bg-slate-900 text-white flex justify-between items-center"><h3 className="text-2xl font-black flex items-center gap-4 tracking-tight"><FilePlus className="text-indigo-400 w-8 h-8" /> Entry Protocol</h3><button onClick={() => setShowAddQuestion(false)} className="p-4 hover:bg-white/10 rounded-3xl transition-all"><X className="w-8 h-8" /></button></div>
-            <form onSubmit={handleAddQuestion} className="p-12 space-y-10 max-h-[75vh] overflow-y-auto custom-scrollbar">
-              <div className="grid grid-cols-2 gap-8">
-                <select value={qForm.subject} onChange={e => setQForm({...qForm, subject: e.target.value as Subject})} className="px-6 py-4.5 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest"><option>Physics</option><option>Chemistry</option><option>Mathematics</option></select>
-                <input type="text" value={qForm.examTag} onChange={e => setQForm({...qForm, examTag: e.target.value})} placeholder="e.g. JEE-MAIN-2024" className="px-6 py-4.5 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xs" />
-              </div>
-              <textarea required rows={5} value={qForm.text} onChange={e => setQForm({...qForm, text: e.target.value})} className="w-full px-8 py-6 bg-slate-50 border border-slate-200 rounded-[2.5rem] font-bold" placeholder="Question statement..." />
-              {qForm.options.map((opt, i) => (
-                <div key={i} className="flex gap-5">
-                  <input required type="text" value={opt} onChange={e => { const newOpts = [...qForm.options]; newOpts[i] = e.target.value; setQForm({...qForm, options: newOpts}); }} className="flex-1 px-8 py-5 bg-slate-50 border border-slate-200 rounded-2xl text-sm" placeholder={`Option ${String.fromCharCode(65 + i)}`} />
-                  <button type="button" onClick={() => setQForm({...qForm, correctAnswer: i})} className={`px-8 py-5 rounded-2xl font-black text-[10px] ${qForm.correctAnswer === i ? 'bg-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>Correct</button>
-                </div>
-              ))}
-              <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[2.5rem] font-black uppercase tracking-[0.4em] shadow-2xl hover:bg-indigo-700 transition-all text-sm">Commit to Bank</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showAddUser && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-md rounded-[3.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-10 bg-slate-900 text-white flex justify-between items-center"><h3 className="text-2xl font-black flex items-center gap-4 tracking-tight"><UserPlus className="text-indigo-400 w-8 h-8" /> User Deployment</h3><button onClick={() => setShowAddUser(false)} className="p-4 hover:bg-white/10 rounded-3xl transition-all"><X className="w-8 h-8" /></button></div>
-            <form onSubmit={handleAddUser} className="p-12 space-y-6">
-              <input required type="text" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" placeholder="Display Name" />
-              <input required type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" placeholder="Email" />
-              <input required type="password" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" placeholder="Password" />
-              <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest"><option value="student">Student</option><option value="admin">Admin</option></select>
-              <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[2.5rem] font-black uppercase tracking-[0.4em] shadow-2xl mt-4">Execute Deployment</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showEditUser && editingUser && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-md rounded-[3.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-10 bg-slate-900 text-white flex justify-between items-center"><h3 className="text-2xl font-black flex items-center gap-4 tracking-tight"><Edit3 className="text-indigo-400 w-8 h-8" /> Modify Record</h3><button onClick={() => { setShowEditUser(false); setEditingUser(null); }} className="p-4 hover:bg-white/10 rounded-3xl transition-all"><X className="w-8 h-8" /></button></div>
-            <form onSubmit={handleSaveEditUser} className="p-12 space-y-6">
-              <input required type="text" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" placeholder="Name" />
-              <input required type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" placeholder="Email" />
-              <input type="password" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" placeholder="New Password (Optional)" />
-              <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest"><option value="student">Student</option><option value="admin">Admin</option></select>
-              <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[2.5rem] font-black uppercase tracking-[0.4em] shadow-2xl mt-4">Update Record</button>
-            </form>
           </div>
         </div>
       )}

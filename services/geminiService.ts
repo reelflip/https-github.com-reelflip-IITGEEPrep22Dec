@@ -1,101 +1,118 @@
 
-import { GoogleGenAI } from "@google/genai";
 import { Chapter, MockTest } from '../types';
-import MockDB from './mockDb';
 
-// Simple TTL Cache for 5 minutes
-const cache = new Map<string, { data: string; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000;
-
-const getCached = (key: string) => {
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
-  return null;
-};
-
-const setCached = (key: string, data: string) => {
-  cache.set(key, { data, timestamp: Date.now() });
-};
-
-// Utility to get the active model configured by Admin
-const getActiveModelId = () => {
-  const config = MockDB.config.get();
-  // Mapping of UI Friendly IDs to actual Google GenAI model names
-  const modelMap: Record<string, string> = {
-    'gemini-3-flash': 'gemini-3-flash-preview',
-    'gemini-3-pro': 'gemini-3-pro-preview',
-    'llama-3-1': 'gemini-3-flash-preview', // Proxying non-native models to Flash for logic
-    'deepseek-v3': 'gemini-3-pro-preview',
-    'qwen-math': 'gemini-3-pro-preview',
-    'mistral-large': 'gemini-3-pro-preview'
-  };
-  return modelMap[config.activeModelId] || 'gemini-3-flash-preview';
-};
-
+/**
+ * DETERMINISTIC LOCAL STUDY PLANNER
+ */
 export const generateStudyPlan = async (chapters: Chapter[], weakAreas: string[], intensity: string = 'high') => {
-  const modelName = getActiveModelId();
-  const cacheKey = `plan_${modelName}_${JSON.stringify(weakAreas)}_${chapters.length}_${intensity}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  const lowConfidenceChapters = [...chapters]
+    .filter(c => c.confidence < 70)
+    .sort((a, b) => a.confidence - b.confidence)
+    .slice(0, 10);
 
-  const prompt = `
-    Context: IIT JEE 2025 Preparation.
-    Status: ${JSON.stringify(chapters.filter(c => c.confidence < 60).map(c => ({ name: c.name, conf: c.confidence })))}
-    Weakness: ${weakAreas.join(', ')}
-    Intensity: ${intensity.toUpperCase()} (Low: 4h/day, Medium: 8h/day, High: 12h+/day)
-    Task: Create a 7-day personalized study plan based on this intensity. Use Markdown formatting. Focus heavily on weak areas.
-  `;
+  const hoursPerDay = intensity === 'high' ? 12 : intensity === 'medium' ? 8 : 4;
+  
+  let plan = `# 7-Day Precision Roadmap (${intensity.toUpperCase()} INTENSITY)\n\n`;
+  plan += `**Target:** Addressing your ${lowConfidenceChapters.length} most critical units and personal focus areas.\n\n`;
 
-  try {
-    // Instantiate GoogleGenAI inside the function to ensure the execution context uses the correct environment variables
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({ model: modelName, contents: prompt });
-    // Correct access of text property on GenerateContentResponse
-    const planText = response.text || "Strategic plan unavailable.";
-    setCached(cacheKey, planText);
-    return planText;
-  } catch (error) {
-    console.error("AI Planner Error:", error);
-    return "The AI Planning Engine is experiencing heavy traffic. Using last cached strategy.";
-  }
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  
+  days.forEach((day, i) => {
+    const focusChapter = lowConfidenceChapters[i % lowConfidenceChapters.length];
+    const secondaryFocus = lowConfidenceChapters[(i + 1) % lowConfidenceChapters.length];
+    
+    plan += `### ${day}\n`;
+    plan += `- **Primary Focus (${Math.floor(hoursPerDay * 0.6)}h):** ${focusChapter?.name || 'Full Syllabus Revision'}\n`;
+    plan += `- **Problem Solving (${Math.floor(hoursPerDay * 0.3)}h):** Practice questions for ${secondaryFocus?.name || 'General Inventory'}\n`;
+    if (weakAreas.length > 0 && weakAreas[0] !== "") {
+      plan += `- **Personal Goal:** Deep dive into ${weakAreas[i % weakAreas.length]}\n`;
+    }
+    plan += `- **Review:** 1 hour formula check for all ${focusChapter?.subject} units.\n\n`;
+  });
+
+  return plan;
 };
 
+/**
+ * LOCAL MENTOR LOGIC
+ */
 export const getMentorAdvice = async (history: {role: string, content: string}[], message: string) => {
-  const modelName = getActiveModelId();
-  const contents = [
-    ...history.map(h => ({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.content }] })),
-    { role: 'user', parts: [{ text: message }] }
+  const msg = message.toLowerCase();
+  const responses = [
+    { key: 'physics', text: "For Physics, prioritize Mechanics and Electrodynamics. Always draw free-body diagrams before writing equations." },
+    { key: 'chemistry', text: "In Organic Chemistry, focus on reaction mechanisms (GOC). For Inorganic, NCERT is your bible—memorize the trends." },
+    { key: 'math', text: "Calculus and Coordinate Geometry carry the most weight. Practice at least 20 PYQs daily to build speed." },
+    { key: 'test', text: "Mock tests are for strategy, not just marks. Analyze your 'silly mistakes'—they are usually caused by bad time management." },
+    { key: 'revision', text: "The best revision is re-solving questions you got wrong the first time. Keep a separate 'Error Notebook'." },
+    { key: 'time', text: "Use the Pomodoro technique: 50 mins study, 10 mins break. This keeps your brain fresh for the 3-hour exam duration." }
+  ];
+  const matched = responses.find(r => msg.includes(r.key));
+  return matched ? matched.text : "I'm here to help with your JEE strategy. Ask me about subject tips or revision.";
+};
+
+/**
+ * LOCAL PERFORMANCE ANALYZER (ENHANCED)
+ */
+export interface PerformanceAnalysis {
+  persona: string;
+  accuracy: number;
+  speedRating: string;
+  subjectInsights: string;
+  recommendations: string[];
+}
+
+export const analyzeMockPerformance = async (test: MockTest, chapters: Chapter[]): Promise<PerformanceAnalysis> => {
+  const accuracy = Math.round((test.totalScore / test.outOf) * 100);
+  
+  // Calculate Speed Metrics (Assuming 180 min total for full tests)
+  const timeTakenMin = (test.timeTakenSeconds || 0) / 60;
+  const totalDurationMin = 180; 
+  const timeUsedPercent = (timeTakenMin / totalDurationMin) * 100;
+  
+  let persona = "The Calculated Strategist";
+  let speedRating = "Optimal";
+
+  if (timeUsedPercent < 40 && accuracy < 50) {
+    persona = "The Rusher";
+    speedRating = "Excessive (Sacrificing Accuracy)";
+  } else if (timeUsedPercent > 90 && accuracy < 60) {
+    persona = "The Struggler";
+    speedRating = "Slow (Conceptual Gaps Detected)";
+  } else if (timeUsedPercent > 80 && accuracy > 85) {
+    persona = "The Perfectionist";
+    speedRating = "Methodical (High Precision)";
+  } else if (timeUsedPercent < 70 && accuracy > 85) {
+    persona = "The JEE Topper Prototype";
+    speedRating = "Elite (Fast & Precise)";
+  }
+
+  // Identify Weakest Subject
+  const scores = [
+    { name: 'Physics', val: test.physicsScore },
+    { name: 'Chemistry', val: test.chemistryScore },
+    { name: 'Mathematics', val: test.mathsScore }
+  ].sort((a, b) => a.val - b.val);
+  
+  const weakest = scores[0];
+  const relevantChapters = chapters
+    .filter(c => c.subject === weakest.name && c.confidence < 60)
+    .slice(0, 2);
+
+  const insights = `Your performance in **${weakest.name}** (${weakest.val} marks) is the primary anchor holding back your rank. Your speed is **${speedRating}**.`;
+
+  const recs = [
+    `Switch focus to ${weakest.name} for the next 48 hours.`,
+    relevantChapters.length > 0 
+      ? `Re-watch lectures for ${relevantChapters.map(c => c.name).join(' and ')}.` 
+      : `Increase numerical practice density in ${weakest.name}.`,
+    accuracy < 70 ? "Reduce 'guess-work' to avoid heavy negative marking penalties." : "Maintain accuracy but work on reducing time-per-question by 15 seconds."
   ];
 
-  try {
-    // Instantiate GoogleGenAI inside the function as per best practices
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    // Using systemInstruction for the mentor persona instead of a user-part message
-    const response = await ai.models.generateContent({ 
-      model: modelName, 
-      contents: contents,
-      config: {
-        systemInstruction: "You are an IIT JEE Master Mentor. Keep advice brief, highly technical for doubts, and motivating for strategy."
-      }
-    });
-    return response.text || "Focus on your basics while I refine the guidance.";
-  } catch (error) {
-    console.error("AI Mentor Error:", error);
-    return "Network interference detected. Focus on your basics while I reconnect.";
-  }
-};
-
-export const analyzeMockPerformance = async (test: MockTest, chapters: Chapter[]) => {
-  const modelName = getActiveModelId();
-  const prompt = `Analyze JEE Mock: ${test.totalScore}/300. PHY:${test.physicsScore}, CHE:${test.chemistryScore}, MAT:${test.mathsScore}. Concisely suggest 2-3 weak chapters to focus on.`;
-
-  try {
-    // Instantiate GoogleGenAI locally
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({ model: modelName, contents: prompt });
-    return response.text || "Analysis generated no summary.";
-  } catch (error) {
-    console.error("AI Analysis Error:", error);
-    return "Analysis service temporarily delayed.";
-  }
+  return {
+    persona,
+    accuracy,
+    speedRating,
+    subjectInsights: insights,
+    recommendations: recs
+  };
 };

@@ -31,10 +31,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, ro
       ]
     },
     {
-      label: 'AI Engines',
+      label: 'Logic Assistants',
       items: [
         { id: 'planner', label: 'Study Strategist', icon: BrainCircuit },
-        { id: 'mentor', label: 'Private Mentor', icon: GraduationCap },
+        { id: 'mentor', label: 'Private Coach', icon: GraduationCap },
       ]
     }
   ];
@@ -44,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, ro
       label: 'Command Center',
       items: [
         { id: 'admin-stats', label: 'Health Dashboard', icon: Activity },
-        { id: 'admin-ai', label: 'Intelligence Lab', icon: Cpu },
+        { id: 'admin-ai', label: 'System Settings', icon: Cpu },
       ]
     },
     {
@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, ro
       label: 'Architecture',
       items: [
         { id: 'db-viewer', label: 'MySQL Engine', icon: Database },
-        { id: 'laravel', label: 'Laravel Bridge', icon: Code2 },
+        { id: 'laravel', label: 'Enterprise PHP Bridge', icon: Code2 },
       ]
     }
   ];
@@ -131,7 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, ro
       <div className="p-5 bg-slate-950/60 flex items-center justify-between border-t border-slate-800/50">
         <div className="flex items-center gap-2.5">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.7)]"></div>
-          <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">v1.4.8 stable</span>
+          <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">v1.5.0 local</span>
         </div>
         <div className="flex gap-1.5">
            <Zap className="w-3 h-3 text-indigo-500 opacity-50" />

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MasterMockTest, Question, MockTest } from '../types';
 import { Clock, ChevronRight, ChevronLeft, Flag, CheckCircle, AlertCircle, LayoutGrid, X, LogOut } from 'lucide-react';
 
@@ -17,6 +17,8 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
   const [timeLeft, setTimeLeft] = useState(mock.durationMinutes * 60);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  
+  const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -52,6 +54,7 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
 
   const handleSubmit = () => {
     let pScore = 0, cScore = 0, mScore = 0;
+    const timeTakenSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
     questions.forEach(q => {
       const userAns = answers[q.id];
@@ -73,6 +76,7 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
       mathsScore: mScore,
       totalScore: pScore + cScore + mScore,
       outOf: mock.totalMarks,
+      timeTakenSeconds: timeTakenSeconds,
       isAutomated: true
     };
 
@@ -96,7 +100,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
 
   return (
     <div className="fixed inset-0 bg-slate-50 z-[100] flex flex-col font-sans animate-in slide-in-from-top duration-500">
-      {/* Exam Header */}
       <header className="h-16 bg-slate-900 text-white px-8 flex items-center justify-between border-b border-white/10 shrink-0">
         <div className="flex items-center gap-4">
           <div className="bg-indigo-600 px-3 py-1 rounded text-[10px] font-black uppercase tracking-tighter">JEE COMPUTER BASED MODE</div>
@@ -125,7 +128,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Exam Area */}
         <div className="flex-1 overflow-y-auto bg-white p-6 md:p-12 custom-scrollbar">
           <div className="max-w-4xl mx-auto space-y-8">
             <div className="flex items-start justify-between">
@@ -137,11 +139,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-200 px-2 py-0.5 rounded">
                       {currentQ.subject}
                     </span>
-                    {currentQ.examTag && (
-                      <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">
-                        {currentQ.examTag}
-                      </span>
-                    )}
                  </div>
                  <p className="text-xl font-medium text-slate-800 leading-relaxed pt-2">
                    {currentQ.text}
@@ -206,7 +203,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
           </div>
         </div>
 
-        {/* Sidebar Palette */}
         <aside className="w-80 bg-slate-50 border-l border-slate-200 p-6 flex flex-col shrink-0">
           <div className="flex items-center gap-3 mb-6">
              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white">
@@ -232,9 +228,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
                 }`}
               >
                 {i + 1}
-                {flagged.has(q.id) && answers[q.id] !== undefined && (
-                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white"></div>
-                )}
               </button>
             ))}
           </div>
@@ -245,9 +238,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
             </div>
             <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
                <div className="w-4 h-4 bg-amber-400 rounded"></div> <span>Flagged ({flagged.size})</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
-               <div className="w-4 h-4 bg-white border border-slate-200 rounded"></div> <span>Not Visited</span>
             </div>
             
             <button 
@@ -260,7 +250,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
         </aside>
       </div>
 
-      {/* Confirmation Modal */}
       {showConfirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white p-10 rounded-[2rem] shadow-2xl max-w-md w-full text-center space-y-6 animate-in zoom-in-95">
@@ -283,7 +272,6 @@ const ExamRunner: React.FC<ExamRunnerProps> = ({ mock, questions, onComplete, on
         </div>
       )}
 
-      {/* Exit Without Attempt Confirmation */}
       {showExitConfirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white p-10 rounded-[2rem] shadow-2xl max-w-md w-full text-center space-y-6 animate-in zoom-in-95">

@@ -1,7 +1,5 @@
 {
-  "name": "IITGEEPrep22Dec",
-  "description": "A comprehensive, AI-powered preparation tracker for IIT JEE aspirants featuring subject-wise progress tracking, AI study planning, mock test analysis, and an intelligent AI mentor.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
+  "name": "IITGEEPrep_Local",
+  "description": "A comprehensive, locally-powered preparation tracker for IIT JEE aspirants featuring subject-wise progress tracking, smart study planning, and mock test analysis.",
+  "requestFramePermissions": []
 }

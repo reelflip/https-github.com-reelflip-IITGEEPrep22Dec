@@ -95,6 +95,7 @@ export interface MockTest {
   mathsScore: number;
   totalScore: number;
   outOf: number;
+  timeTakenSeconds?: number; // New: To track velocity
   isAutomated?: boolean; 
 }
 
