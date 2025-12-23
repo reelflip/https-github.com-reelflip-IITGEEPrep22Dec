@@ -8,11 +8,8 @@ import {
   HardDrive, MonitorSmartphone, KeyRound, Globe2, Download, Loader2
 } from 'lucide-react';
 
-declare var JSZip: any;
-declare var saveAs: any;
-
 const LaravelReference: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'router' | 'bootstrap' | 'services' | 'sql' | 'htaccess'>('sql');
+  const [activeSubTab, setActiveSubTab] = useState<'sql' | 'router' | 'services' | 'bootstrap' | 'htaccess'>('sql');
   const [isZipping, setIsZipping] = useState(false);
 
   const phpFiles = {
@@ -22,6 +19,10 @@ const LaravelReference: React.FC = () => {
       icon: GitBranch,
       desc: 'The Entry Point. Now handles complex relational fetches like bringing notes and videos together.',
       code: `<?php
+/**
+ * IIT JEE Mastery - Main API Router
+ * All requests are routed here via .htaccess
+ */
 require_once 'Core/Bootstrap.php';
 
 $path = $_GET['path'] ?? 'status';
@@ -29,22 +30,25 @@ $data = json_decode(file_get_contents("php://input"), true) ?? [];
 
 switch ($path) {
     case 'status':
-        echo json_encode(["system" => "IITGEE_API_ACTIVE", "engine" => "Relational_V2"]);
+        echo json_encode(["system" => "IITGEE_API_ACTIVE", "engine" => "Relational_V2.1"]);
         break;
 
     case 'tracker/full-data':
         Middleware::auth(); 
-        // Fetches chapters + user progress + videos in one optimized service call
         TrackerService::getDashboardData();
         break;
 
     case 'auth/login':
         AuthService::login($data);
         break;
+        
+    case 'auth/register':
+        AuthService::register($data);
+        break;
 
     default:
         http_response_code(404);
-        echo json_encode(["error" => "Endpoint not found"]);
+        echo json_encode(["error" => "Endpoint not found: " . $path]);
 }
 ?>`
     },
@@ -54,17 +58,21 @@ switch ($path) {
       icon: Zap,
       desc: 'Database Connection Singleton with strict UTF8MB4 support for math symbols in notes.',
       code: `<?php
+/**
+ * Core Initialization & Database Connectivity
+ */
 session_start();
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
+// DB SETTINGS - UPDATE THESE FOR YOUR HOSTINGER hPANEL
 $db_config = [
     'host' => 'localhost',
     'name' => 'u123_jee_mastery',
     'user' => 'u123_admin',
-    'pass' => 'P@ssw0rd123!'
+    'pass' => 'YourStrongPassword123!'
 ];
 
 try {
@@ -74,33 +82,40 @@ try {
         $db_config['pass'],
         [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
         ]
     );
 } catch(PDOException $e) {
     http_response_code(500);
-    die(json_encode(["error" => "Critical: Connection Failed"]));
+    die(json_encode(["error" => "Database Connection Failed. Check Bootstrap.php configuration."]));
 }
 
+// Auto-load Service Classes
 spl_autoload_register(function ($class) {
     $path = __DIR__ . '/../Services/' . $class . '.php';
     if (file_exists($path)) require_once $path;
-});`
+});
+?>`
     },
     services: {
       path: 'Services/TrackerService.php',
       title: 'api/Services/TrackerService.php',
       icon: Layers,
-      desc: 'Logic layer that joins the Master Chapter data with Student Progress data.',
+      desc: 'Logic layer that joins the Master Chapter data (notes, videos) with student-specific progress.',
       code: `<?php
 class TrackerService {
     /**
      * Fetches all chapters joined with user-specific progress
+     * This is the main data source for the student dashboard
      */
     public static function getDashboardData() {
         global $pdo;
+        if (!isset($_SESSION['user_id'])) return;
+        
         $user_id = $_SESSION['user_id'];
 
+        // Get Chapters + User Progress Pivot
         $sql = "SELECT c.*, p.status, p.confidence, p.time_spent_mins 
                 FROM chapters c
                 LEFT JOIN user_progress p ON c.id = p.chapter_id AND p.user_id = ?
@@ -110,7 +125,7 @@ class TrackerService {
         $stmt->execute([$user_id]);
         $chapters = $stmt->fetchAll();
 
-        // Include relational data for each chapter
+        // Recursively attach relational entities
         foreach($chapters as &$ch) {
             $ch['videos'] = self::getVideos($ch['id']);
             $ch['question_count'] = self::getQuestionCount($ch['id']);
@@ -125,15 +140,25 @@ class TrackerService {
         $stmt->execute([$chapter_id]);
         return $stmt->fetchAll();
     }
+
+    private static function getQuestionCount($chapter_id) {
+        global $pdo;
+        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM questions WHERE chapter_id = ?");
+        $stmt->execute([$chapter_id]);
+        $result = $stmt->fetch();
+        return $result ? (int)$result['count'] : 0;
+    }
 }
 ?>`
     },
     sql: {
-      path: 'schema.sql',
+      path: 'schema_full.sql',
       title: 'Master Relational Schema (SQL)',
       icon: Database,
-      desc: 'The complete 7-table architecture. This handles everything from curriculum notes to quiz attempts.',
-      code: `-- 1. USER ACCOUNTS
+      desc: 'Full relational ecosystem. Notes live in the "chapters" table; videos and questions in their own child tables.',
+      code: `-- IIT JEE Relational Database v2.1
+
+-- 1. Master User Registry
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     full_name VARCHAR(100) NOT NULL,
@@ -143,17 +168,17 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 2. MASTER CURRICULUM (Where NOTES are stored)
+-- 2. Curriculum Core (Notes stored here as LONGTEXT)
 CREATE TABLE IF NOT EXISTS chapters (
     id INT AUTO_INCREMENT PRIMARY KEY,
     subject ENUM('Physics', 'Chemistry', 'Mathematics') NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    notes LONGTEXT, -- Stores the long-form study material
+    notes LONGTEXT, 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 3. VIDEO TUTORIAL LIBRARY
+-- 3. Video Assets
 CREATE TABLE IF NOT EXISTS video_links (
     id INT AUTO_INCREMENT PRIMARY KEY,
     chapter_id INT NOT NULL,
@@ -162,18 +187,18 @@ CREATE TABLE IF NOT EXISTS video_links (
     FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4. MASTER QUESTION BANK
+-- 4. Question Inventory
 CREATE TABLE IF NOT EXISTS questions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     chapter_id INT NOT NULL,
     subject VARCHAR(50) NOT NULL,
     question_text TEXT NOT NULL,
-    options JSON NOT NULL, -- Stores ['A','B','C','D']
-    correct_answer INT NOT NULL, -- 0-3
+    options JSON NOT NULL, 
+    correct_answer INT NOT NULL,
     FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 5. STUDENT PROGRESS (Pivot Table)
+-- 5. Progress Pivot (Links Students to Chapters)
 CREATE TABLE IF NOT EXISTS user_progress (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -187,7 +212,7 @@ CREATE TABLE IF NOT EXISTS user_progress (
     FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 6. QUIZ PERFORMANCE LOGS
+-- 6. Exam Performance Logs
 CREATE TABLE IF NOT EXISTS test_attempts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -202,8 +227,12 @@ CREATE TABLE IF NOT EXISTS test_attempts (
       path: '.htaccess',
       title: 'api/.htaccess',
       icon: FileCode,
-      desc: 'Enables clean URLs for your API.',
+      desc: 'Pretty URL handler for Hostinger servers.',
       code: `RewriteEngine On
+# Prevent directory listing
+Options -Indexes
+
+# Route all requests to index.php
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php?path=$1 [QSA,L]`
@@ -211,9 +240,18 @@ RewriteRule ^(.*)$ index.php?path=$1 [QSA,L]`
   };
 
   const handleDownloadZip = async () => {
+    // Safety Check: Access libraries from window object
+    const JSZipLib = (window as any).JSZip;
+    const saveAsLib = (window as any).saveAs;
+
+    if (!JSZipLib || !saveAsLib) {
+      alert("System: Deployment libraries are still initializing from CDN. Please wait 3 seconds and retry.");
+      return;
+    }
+
     setIsZipping(true);
     try {
-      const zip = new JSZip();
+      const zip = new JSZipLib();
       
       // Root Files
       zip.file("index.php", phpFiles.router.code);
@@ -225,10 +263,13 @@ RewriteRule ^(.*)$ index.php?path=$1 [QSA,L]`
       core.file("Bootstrap.php", phpFiles.bootstrap.code);
       core.file("Middleware.php", `<?php
 class Middleware {
+    /**
+     * Verifies user session for protected routes
+     */
     public static function auth() {
         if (!isset($_SESSION['user_id'])) {
             http_response_code(401);
-            die(json_encode(["error" => "Auth required"]));
+            die(json_encode(["error" => "Authorization required. Please log in."]));
         }
     }
 }
@@ -245,10 +286,30 @@ class AuthService {
         $user = $stmt->fetch();
         if ($user && password_verify($data['password'], $user['password'])) {
             $_SESSION['user_id'] = $user['id'];
-            echo json_encode(["status" => "success", "user" => ["id" => $user['id'], "name" => $user['full_name']]]);
+            echo json_encode([
+                "status" => "success", 
+                "user" => [
+                    "id" => $user['id'], 
+                    "name" => $user['full_name'],
+                    "role" => $user['role']
+                ]
+            ]);
         } else {
             http_response_code(401);
-            echo json_encode(["error" => "Invalid Login"]);
+            echo json_encode(["error" => "Invalid email or password"]);
+        }
+    }
+
+    public static function register($data) {
+        global $pdo;
+        $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
+        try {
+            $stmt = $pdo->prepare("INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)");
+            $stmt->execute([$data['name'], $data['email'], $hashed]);
+            echo json_encode(["status" => "success", "message" => "Account created"]);
+        } catch(Exception $e) {
+            http_response_code(400);
+            echo json_encode(["error" => "User already exists"]);
         }
     }
 }
@@ -256,11 +317,11 @@ class AuthService {
       services.file("TrackerService.php", phpFiles.services.code);
 
       const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, "iitgee_full_backend.zip");
-      alert("Relational Backend ZIP generated successfully!");
+      saveAsLib(content, "iitgee_production_bundle.zip");
+      alert("Deployment Package Ready! Extract this inside your Hostinger 'api' folder.");
     } catch (error) {
       console.error(error);
-      alert("Error generating ZIP.");
+      alert("Critical: Failed to build archive. Check browser console for IO errors.");
     } finally {
       setIsZipping(false);
     }
@@ -275,7 +336,7 @@ class AuthService {
              <div className="bg-indigo-500 p-3.5 rounded-2xl text-white shadow-xl shadow-indigo-500/20"><Database className="w-7 h-7" /></div>
              <div>
                 <span className="text-[10px] font-black uppercase tracking-[0.5em] text-indigo-400 block mb-1">Architecture Specification</span>
-                <h2 className="text-4xl font-black tracking-tighter">Relational Storage Engine</h2>
+                <h2 className="text-4xl font-black tracking-tighter">Enterprise PHP Bridge</h2>
              </div>
           </div>
           <p className="text-slate-400 max-w-2xl text-lg font-medium leading-relaxed mb-10">
@@ -287,7 +348,7 @@ class AuthService {
             className="flex items-center gap-4 bg-white text-slate-900 px-10 py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-indigo-50 transition-all shadow-2xl shadow-indigo-500/10 active:scale-95 disabled:opacity-50"
           >
             {isZipping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-            {isZipping ? 'Packaging Full Engine...' : 'Download Full Relational Backend (.ZIP)'}
+            {isZipping ? 'Packaging Full Engine...' : 'Download Full Production Bundle (.ZIP)'}
           </button>
         </div>
         <div className="absolute -right-20 -top-20 opacity-5 rotate-12">
@@ -304,10 +365,10 @@ class AuthService {
               <ul className="space-y-6">
                 {[
                   { t: 'The Chapters Table', d: 'Stores the core curriculum. All study notes live in the LONGTEXT "notes" column here.' },
-                  { t: 'Normalized Videos', d: 'Stored in a separate table. You can add 100+ videos per chapter without bloat.' },
-                  { t: 'JSON Questions', d: 'Question options are stored as a JSON array for modern flexibility.' },
-                  { t: 'Progress Pivot', d: 'Links Users to Chapters. This is where status and confidence are calculated.' },
-                  { t: 'Atomic Attempts', d: 'Every quiz result is a unique row in test_attempts for deep analytics.' },
+                  { t: 'Normalized Videos', d: 'Stored in a separate table. You can add unlimited videos per chapter without bloat.' },
+                  { t: 'JSON Questions', d: 'Question options are stored as a JSON array for modern flexibility and easy parsing.' },
+                  { t: 'Progress Pivot', d: 'Links Users to Chapters. This is where status and confidence metrics are calculated.' },
+                  { t: 'Atomic Attempts', d: 'Every quiz result is a unique row in test_attempts for deep student analytics.' },
                 ].map((step, i) => (
                   <li key={i} className="group flex gap-4">
                      <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-[11px] font-black text-slate-800 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
@@ -331,7 +392,7 @@ class AuthService {
                  onClick={() => setActiveSubTab(tab)}
                  className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
                >
-                 {React.createElement(phpFiles[tab as keyof typeof phpFiles].icon, { className: "w-3.5 h-3.5" })} {tab === 'sql' ? 'Full Schema' : tab}
+                 {React.createElement(phpFiles[tab].icon, { className: "w-3.5 h-3.5" })} {tab === 'sql' ? 'Full Schema' : tab}
                </button>
              ))}
            </div>
@@ -344,17 +405,17 @@ class AuthService {
                     <div className="w-3 h-2 rounded-full bg-amber-500/50"></div>
                     <div className="w-3 h-2 rounded-full bg-emerald-500/50"></div>
                   </div>
-                  <span className="font-mono text-xs text-slate-500 border-l border-slate-800 pl-4">{phpFiles[activeSubTab as keyof typeof phpFiles].title}</span>
+                  <span className="font-mono text-xs text-slate-500 border-l border-slate-800 pl-4">{phpFiles[activeSubTab].title}</span>
                 </div>
                 <button 
-                  onClick={() => navigator.clipboard.writeText(phpFiles[activeSubTab as keyof typeof phpFiles].code)}
+                  onClick={() => navigator.clipboard.writeText(phpFiles[activeSubTab].code)}
                   className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20"
                 >
                   <Copy className="w-3.5 h-3.5" /> Copy
                 </button>
               </div>
               <pre className="p-10 text-indigo-200 font-mono text-sm leading-relaxed overflow-x-auto max-h-[600px] custom-scrollbar bg-transparent">
-                <code>{phpFiles[activeSubTab as keyof typeof phpFiles].code}</code>
+                <code>{phpFiles[activeSubTab].code}</code>
               </pre>
            </div>
         </div>
