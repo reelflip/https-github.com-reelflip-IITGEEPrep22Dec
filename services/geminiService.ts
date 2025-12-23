@@ -1,58 +1,8 @@
 
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { Chapter, MockTest } from '../types';
 
-/**
- * DETERMINISTIC LOCAL STUDY PLANNER
- */
-export const generateStudyPlan = async (chapters: Chapter[], weakAreas: string[], intensity: string = 'high') => {
-  const lowConfidenceChapters = [...chapters]
-    .filter(c => c.confidence < 70)
-    .sort((a, b) => a.confidence - b.confidence)
-    .slice(0, 10);
-
-  const hoursPerDay = intensity === 'high' ? 12 : intensity === 'medium' ? 8 : 4;
-  
-  let plan = `# 7-Day Precision Roadmap (${intensity.toUpperCase()} INTENSITY)\n\n`;
-  plan += `**Target:** Addressing your ${lowConfidenceChapters.length} most critical units and personal focus areas.\n\n`;
-
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  
-  days.forEach((day, i) => {
-    const focusChapter = lowConfidenceChapters[i % lowConfidenceChapters.length];
-    const secondaryFocus = lowConfidenceChapters[(i + 1) % lowConfidenceChapters.length];
-    
-    plan += `### ${day}\n`;
-    plan += `- **Primary Focus (${Math.floor(hoursPerDay * 0.6)}h):** ${focusChapter?.name || 'Full Syllabus Revision'}\n`;
-    plan += `- **Problem Solving (${Math.floor(hoursPerDay * 0.3)}h):** Practice questions for ${secondaryFocus?.name || 'General Inventory'}\n`;
-    if (weakAreas.length > 0 && weakAreas[0] !== "") {
-      plan += `- **Personal Goal:** Deep dive into ${weakAreas[i % weakAreas.length]}\n`;
-    }
-    plan += `- **Review:** 1 hour formula check for all ${focusChapter?.subject} units.\n\n`;
-  });
-
-  return plan;
-};
-
-/**
- * LOCAL MENTOR LOGIC
- */
-export const getMentorAdvice = async (history: {role: string, content: string}[], message: string) => {
-  const msg = message.toLowerCase();
-  const responses = [
-    { key: 'physics', text: "For Physics, prioritize Mechanics and Electrodynamics. Always draw free-body diagrams before writing equations." },
-    { key: 'chemistry', text: "In Organic Chemistry, focus on reaction mechanisms (GOC). For Inorganic, NCERT is your bible—memorize the trends." },
-    { key: 'math', text: "Calculus and Coordinate Geometry carry the most weight. Practice at least 20 PYQs daily to build speed." },
-    { key: 'test', text: "Mock tests are for strategy, not just marks. Analyze your 'silly mistakes'—they are usually caused by bad time management." },
-    { key: 'revision', text: "The best revision is re-solving questions you got wrong the first time. Keep a separate 'Error Notebook'." },
-    { key: 'time', text: "Use the Pomodoro technique: 50 mins study, 10 mins break. This keeps your brain fresh for the 3-hour exam duration." }
-  ];
-  const matched = responses.find(r => msg.includes(r.key));
-  return matched ? matched.text : "I'm here to help with your JEE strategy. Ask me about subject tips or revision.";
-};
-
-/**
- * LOCAL PERFORMANCE ANALYZER (ENHANCED)
- */
+// Performance Analysis type for Gemini JSON output
 export interface PerformanceAnalysis {
   persona: string;
   accuracy: number;
@@ -61,58 +11,122 @@ export interface PerformanceAnalysis {
   recommendations: string[];
 }
 
-export const analyzeMockPerformance = async (test: MockTest, chapters: Chapter[]): Promise<PerformanceAnalysis> => {
-  const accuracy = Math.round((test.totalScore / test.outOf) * 100);
+/**
+ * GEMINI API STUDY PLANNER
+ * Uses gemini-3-pro-preview for complex reasoning tasks.
+ */
+export const generateStudyPlan = async (chapters: Chapter[], weakAreas: string[], intensity: string = 'high') => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Calculate Speed Metrics (Assuming 180 min total for full tests)
-  const timeTakenMin = (test.timeTakenSeconds || 0) / 60;
-  const totalDurationMin = 180; 
-  const timeUsedPercent = (timeTakenMin / totalDurationMin) * 100;
-  
-  let persona = "The Calculated Strategist";
-  let speedRating = "Optimal";
+  const lowConfidenceChapters = [...chapters]
+    .filter(c => c.confidence < 70)
+    .sort((a, b) => a.confidence - b.confidence)
+    .slice(0, 10)
+    .map(c => ({ name: c.name, subject: c.subject, confidence: c.confidence }));
 
-  if (timeUsedPercent < 40 && accuracy < 50) {
-    persona = "The Rusher";
-    speedRating = "Excessive (Sacrificing Accuracy)";
-  } else if (timeUsedPercent > 90 && accuracy < 60) {
-    persona = "The Struggler";
-    speedRating = "Slow (Conceptual Gaps Detected)";
-  } else if (timeUsedPercent > 80 && accuracy > 85) {
-    persona = "The Perfectionist";
-    speedRating = "Methodical (High Precision)";
-  } else if (timeUsedPercent < 70 && accuracy > 85) {
-    persona = "The JEE Topper Prototype";
-    speedRating = "Elite (Fast & Precise)";
+  const prompt = `Act as an expert IIT JEE strategist. Generate a precise 7-day study plan for a student with these data points:
+    - Current Low Confidence Units: ${JSON.stringify(lowConfidenceChapters)}
+    - User Specified Weak Areas: ${weakAreas.join(', ')}
+    - Daily Intensity: ${intensity} (low ~4h, medium ~8h, high ~12h)
+    
+    The output must be in Markdown format. Focus on balancing Physics, Chemistry, and Mathematics while prioritizing the weakest areas first.`;
+
+  try {
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 12000 }
+      }
+    });
+    return response.text || "I was unable to formulate a strategy at this moment. Please review your metrics and try again.";
+  } catch (error) {
+    console.error("Gemini Strategy Error:", error);
+    return "The logic engine is currently congested. Reverting to automated local scheduling...";
   }
+};
 
-  // Identify Weakest Subject
-  const scores = [
-    { name: 'Physics', val: test.physicsScore },
-    { name: 'Chemistry', val: test.chemistryScore },
-    { name: 'Mathematics', val: test.mathsScore }
-  ].sort((a, b) => a.val - b.val);
+/**
+ * GEMINI AI MENTOR
+ * Uses gemini-3-flash-preview for real-time natural conversations.
+ */
+export const getMentorAdvice = async (history: {role: string, content: string}[], message: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const weakest = scores[0];
-  const relevantChapters = chapters
-    .filter(c => c.subject === weakest.name && c.confidence < 60)
-    .slice(0, 2);
+  const formattedHistory = history.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.content }]
+  }));
 
-  const insights = `Your performance in **${weakest.name}** (${weakest.val} marks) is the primary anchor holding back your rank. Your speed is **${speedRating}**.`;
+  try {
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: [...formattedHistory, { role: 'user', parts: [{ text: message }] }] as any,
+      config: {
+        systemInstruction: "You are an elite IIT JEE prep coach. Provide sharp, strategic, and subject-specific advice. Focus on Mechanics, Organic Chemistry, and Calculus as high-weightage areas. Be encouraging but rigorous.",
+      }
+    });
+    return response.text || "I am currently processing high volumes of data. Please ask your strategy question again.";
+  } catch (error) {
+    console.error("Gemini Mentor Error:", error);
+    return "Mentor session timed out. Please focus on your current chapter revision.";
+  }
+};
 
-  const recs = [
-    `Switch focus to ${weakest.name} for the next 48 hours.`,
-    relevantChapters.length > 0 
-      ? `Re-watch lectures for ${relevantChapters.map(c => c.name).join(' and ')}.` 
-      : `Increase numerical practice density in ${weakest.name}.`,
-    accuracy < 70 ? "Reduce 'guess-work' to avoid heavy negative marking penalties." : "Maintain accuracy but work on reducing time-per-question by 15 seconds."
-  ];
+/**
+ * GEMINI PERFORMANCE ANALYZER
+ * Uses structured JSON output to analyze mock test data.
+ */
+export const analyzeMockPerformance = async (test: MockTest, chapters: Chapter[]): Promise<PerformanceAnalysis> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const prompt = `Analyze this IIT JEE mock test session:
+    - Scores: Physics ${test.physicsScore}, Chemistry ${test.chemistryScore}, Maths ${test.mathsScore}
+    - Total: ${test.totalScore} / ${test.outOf}
+    - Time used: ${test.timeTakenSeconds}s
+    
+    Current syllabus status for context:
+    ${chapters.filter(c => c.confidence < 60).slice(0, 5).map(c => `${c.name} (${c.subject})`).join(', ')}
+    
+    Provide a psychological and technical performance breakdown in JSON format.`;
 
-  return {
-    persona,
-    accuracy,
-    speedRating,
-    subjectInsights: insights,
-    recommendations: recs
-  };
+  try {
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            persona: { type: Type.STRING, description: "A creative title for the student's exam persona" },
+            accuracy: { type: Type.NUMBER, description: "Calculated accuracy percentage" },
+            speedRating: { type: Type.STRING, description: "Velocity assessment (Optimal, Slow, or Rusher)" },
+            subjectInsights: { type: Type.STRING, description: "Deep dive into subject-wise performance in Markdown" },
+            recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 clear actionable steps" }
+          },
+          required: ["persona", "accuracy", "speedRating", "subjectInsights", "recommendations"]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    return {
+      persona: parsed.persona || "The Persistent Aspirant",
+      accuracy: parsed.accuracy || 0,
+      speedRating: parsed.speedRating || "Average",
+      subjectInsights: parsed.subjectInsights || "Insufficient data for detailed breakdown.",
+      recommendations: parsed.recommendations || ["Review incorrect answers.", "Maintain consistency.", "Analyze time-per-question."]
+    };
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    // Return a basic structure if AI fails
+    return {
+      persona: "The Determined Student",
+      accuracy: Math.round((test.totalScore / test.outOf) * 100),
+      speedRating: (test.timeTakenSeconds || 0) < 5400 ? "High Velocity" : "Calculated",
+      subjectInsights: "Deep AI analysis is currently unavailable. Review your subject scores to identify the primary focus for next week.",
+      recommendations: ["Manually identify weak topics from the answer key.", "Increase focus on your lowest scoring subject.", "Attempt another mock test in 5 days."]
+    };
+  }
 };

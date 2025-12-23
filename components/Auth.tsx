@@ -33,9 +33,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     const email = credentials ? credentials.email : formData.email;
     const pass = credentials ? credentials.pass : formData.password;
 
-    setTimeout(() => {
+    // Fixed: Added async to the timeout callback and awaited the MockDB calls to ensure results are strings/objects not Promises
+    setTimeout(async () => {
       if (mode === 'login' || credentials) {
-        const result = MockDB.auth.login(email, pass);
+        const result = await MockDB.auth.login(email, pass);
         if (typeof result === 'string') {
           setError(result);
           setLoading(false);
@@ -53,7 +54,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           setLoading(false);
           return;
         }
-        const result = MockDB.auth.register(formData.name, formData.email, formData.password, formData.recoveryHint);
+        const result = await MockDB.auth.register(formData.name, formData.email, formData.password, formData.recoveryHint);
         if (typeof result === 'string') {
           setError(result);
           setLoading(false);
@@ -61,7 +62,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           onLogin();
         }
       } else if (mode === 'recover') {
-        const result = MockDB.auth.recover(formData.email, formData.recoveryHint, formData.password);
+        const result = await MockDB.auth.recover(formData.email, formData.recoveryHint, formData.password);
         if (result === "SUCCESS") {
           setSuccess("Password reset successful! You can now login.");
           setMode('login');
