@@ -52,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, ro
       items: [
         { id: 'admin-curriculum', label: 'Curriculum Builder', icon: LayoutGrid },
         { id: 'admin-questions', label: 'Question Bank', icon: Tag },
-        { id: 'admin-mocks', label: 'Mock Factory', icon: ClipboardCheck },
+        { id: 'admin-tests', label: 'Test Factory', icon: ClipboardCheck },
       ]
     },
     {

@@ -71,7 +71,7 @@ class MockDB {
           id: 'mock_1',
           name: 'JEE Main Full Syllabus Mock #1',
           durationMinutes: 180,
-          totalMarks: 300,
+          totalMarks: 40,
           questionIds: globalQuestions.slice(0, 10).map(q => q.id)
         }
       ],
@@ -232,6 +232,12 @@ class MockDB {
       db.masterMocks = [...db.masterMocks, mock];
       MockDB.saveDB(db);
       return mock;
+    },
+    deleteMasterMock: (id: string) => {
+      const db = MockDB.getDB();
+      db.masterMocks = db.masterMocks.filter((m: MasterMockTest) => m.id !== id);
+      MockDB.saveDB(db);
+      MockDB.log(`Admin decommissioned test: ${id}`);
     },
     create: (test: MockTest) => {
       const db = MockDB.getDB();

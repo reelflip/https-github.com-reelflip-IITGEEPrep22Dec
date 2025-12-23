@@ -142,7 +142,7 @@ const App: React.FC = () => {
           'admin-ai': <AdminPanel initialTab="ai-config" />,
           'admin-curriculum': <AdminPanel initialTab="curriculum" />,
           'admin-questions': <AdminPanel initialTab="questions" />,
-          'admin-mocks': <AdminPanel initialTab="constructor" />,
+          'admin-tests': <AdminPanel initialTab="admin-tests" />,
           'admin-users': <AdminPanel initialTab="users" />,
           'db-viewer': <DbViewer onNavigate={setActiveTab} />,
           'laravel': <LaravelReference />,
