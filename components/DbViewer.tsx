@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MockDB from '../services/mockDb';
-import { Database, Table, ExternalLink, Users, ClipboardList, ShieldCheck, Activity } from 'lucide-react';
+import { Database, Table, ExternalLink, Users, ClipboardList, ShieldCheck, Activity, Loader2 } from 'lucide-react';
 
 interface DbViewerProps {
   onNavigate: (tab: string) => void;
@@ -10,12 +10,45 @@ interface DbViewerProps {
 const DbViewer: React.FC<DbViewerProps> = ({ onNavigate }) => {
   const [activeTable, setActiveTable] = useState<'chapters' | 'mock_tests' | 'users' | 'logs'>('chapters');
   
-  const chapters = MockDB.chapters.all();
-  const mockTests = MockDB.tests.all();
-  const users = MockDB.admin.getAllUsers();
-  const logs = MockDB.admin.getLogs();
+  // Fix: Handle async MockDB calls using state and useEffect
+  const [tableData, setTableData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchTableData = async () => {
+      setLoading(true);
+      try {
+        let result: any[] = [];
+        switch (activeTable) {
+          case 'chapters':
+            result = await MockDB.chapters.all();
+            break;
+          case 'mock_tests':
+            result = await MockDB.tests.all();
+            break;
+          case 'users':
+            result = await MockDB.admin.getAllUsers();
+            break;
+          case 'logs':
+            result = MockDB.admin.getLogs();
+            break;
+        }
+        setTableData(result);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTableData();
+  }, [activeTable]);
   
   const renderTable = () => {
+    if (loading) return (
+      <div className="p-20 flex flex-col items-center justify-center text-slate-400 gap-4">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <span className="text-xs font-mono uppercase tracking-widest">Awaiting Engine Response...</span>
+      </div>
+    );
+
     switch (activeTable) {
       case 'chapters':
         return (
@@ -29,7 +62,7 @@ const DbViewer: React.FC<DbViewerProps> = ({ onNavigate }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {chapters.map((row) => (
+              {tableData.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-3 text-indigo-600 font-bold">{row.id}</td>
                   <td className="px-6 py-3 text-slate-800">{row.name}</td>
@@ -52,7 +85,7 @@ const DbViewer: React.FC<DbViewerProps> = ({ onNavigate }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {logs.map((row) => (
+              {tableData.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50">
                   <td className="px-6 py-3 text-slate-400">{new Date(row.timestamp).toLocaleTimeString()}</td>
                   <td className="px-6 py-3 font-bold text-slate-600">{row.userName}</td>
@@ -81,7 +114,7 @@ const DbViewer: React.FC<DbViewerProps> = ({ onNavigate }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {mockTests.map((row) => (
+              {tableData.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50">
                   <td className="px-6 py-3 text-slate-800 font-bold">{row.name}</td>
                   <td className="px-6 py-3 text-center text-indigo-600 font-black">{row.totalScore}</td>
@@ -102,7 +135,7 @@ const DbViewer: React.FC<DbViewerProps> = ({ onNavigate }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map((row) => (
+              {tableData.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-3 text-slate-800">{row.name}</td>
                   <td className="px-6 py-3 text-slate-500">{row.email}</td>

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MockTest, Chapter, MasterMockTest, Question } from '../types';
 import { Plus, Trash2, TrendingUp, Info, Sparkles, Loader2, X, BrainCircuit, BarChart, PlayCircle, Clock, BookOpen, Timer, Zap, ChevronDown, CheckSquare } from 'lucide-react';
 import { analyzeMockPerformance, PerformanceAnalysis } from '../services/geminiService';
@@ -19,8 +19,19 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
   const [analysisResult, setAnalysisResult] = useState<{ id: string, report: PerformanceAnalysis } | null>(null);
   const [formData, setFormData] = useState({ name: '', physics: 0, chemistry: 0, maths: 0 });
 
-  const globalQuestions = MockDB.questions.all();
-  const masterMocks = MockDB.tests.getMasterMocks();
+  // Fix: Handle async MockDB calls using state and useEffect
+  const [globalQuestions, setGlobalQuestions] = useState<Question[]>([]);
+  const [masterMocks, setMasterMocks] = useState<MasterMockTest[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const qs = await MockDB.questions.all();
+      const mm = await MockDB.tests.getMasterMocks();
+      setGlobalQuestions(qs);
+      setMasterMocks(mm);
+    };
+    loadData();
+  }, []);
 
   const handleStartExam = (master: MasterMockTest) => {
     const mockQuestions = globalQuestions.filter(q => master.questionIds.includes(q.id));
@@ -56,7 +67,9 @@ const MockTests: React.FC<MockTestsProps> = ({ tests, addTest, removeTest }) => 
 
   const handleAnalyze = async (test: MockTest) => {
     setAnalyzingId(test.id);
-    const result = await analyzeMockPerformance(test, MockDB.chapters.all());
+    // Fix: Await the chapters fetch
+    const chapters = await MockDB.chapters.all();
+    const result = await analyzeMockPerformance(test, chapters);
     setAnalysisResult({ id: test.id, report: result });
     setAnalyzingId(null);
   };

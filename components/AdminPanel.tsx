@@ -7,7 +7,7 @@ import {
   CheckCircle, Clock, Save, FilePlus, BrainCircuit, Activity, 
   LineChart as LucideLineChart, MousePointer2, X, ShieldAlert, 
   UserPlus, Lock, Unlock, Edit3, Filter, Rocket, AlertTriangle,
-  Cog, Gauge
+  Cog, Gauge, Server, Globe, HardDrive
 } from 'lucide-react';
 import { Subject, ChapterStatus, Question, MasterMockTest, AIModelConfig, User, UserRole } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -20,6 +20,7 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [userSearch, setUserSearch] = useState('');
+  const [isLive, setIsLive] = useState(MockDB.isLiveMode());
   const stats = MockDB.admin.getSystemStats();
   
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -28,17 +29,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
   const [systemConfig, setSystemConfig] = useState<any>(MockDB.config.get());
   const [showAddQuestion, setShowAddQuestion] = useState(false);
 
-  const refreshPanel = () => {
-    setQuestions(MockDB.questions.all());
-    setMasterMocks(MockDB.tests.getMasterMocks());
-    setChapters(MockDB.chapters.all());
+  // Fix: refreshPanel made asynchronous to await DB calls
+  const refreshPanel = async () => {
+    const [qs, mm, ch, us] = await Promise.all([
+      MockDB.questions.all(),
+      MockDB.tests.getMasterMocks(),
+      MockDB.chapters.all(),
+      MockDB.admin.getAllUsers()
+    ]);
+    setQuestions(qs);
+    setMasterMocks(mm);
+    setChapters(ch);
+    setAllUsers(us);
     setSystemConfig(MockDB.config.get());
-    setAllUsers(MockDB.admin.getAllUsers());
+    setIsLive(MockDB.isLiveMode());
   };
 
   useEffect(() => {
     refreshPanel();
   }, [initialTab]);
+
+  const handleToggleDataMode = () => {
+    const nextMode = !isLive;
+    MockDB.setLiveMode(nextMode);
+    setIsLive(nextMode);
+    window.location.reload(); // Hard refresh to reset all data pointers
+  };
 
   // --- User Management State ---
   const [showAddUser, setShowAddUser] = useState(false);
@@ -69,9 +85,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
     refreshPanel();
   };
 
-  const handleAddUser = (e: React.FormEvent) => {
+  // Fix: Use await for missing/added admin/auth methods
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    MockDB.admin.addUser({ ...userForm, recoveryHint: 'admin_manual_add' });
+    await MockDB.admin.addUser({ ...userForm, recoveryHint: 'admin_manual_add' });
     setShowAddUser(false);
     setUserForm({ name: '', email: '', password: '', role: 'student' });
     refreshPanel();
@@ -83,49 +100,49 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
     setShowEditUser(true);
   };
 
-  const handleSaveEditUser = (e: React.FormEvent) => {
+  const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     const updates: Partial<User> = { name: userForm.name, email: userForm.email, role: userForm.role };
     if (userForm.password) updates.password = userForm.password;
-    MockDB.admin.updateUser(editingUser.id, updates);
+    await MockDB.admin.updateUser(editingUser.id, updates);
     setShowEditUser(false);
     setEditingUser(null);
     refreshPanel();
   };
 
-  const handleDeleteUser = (id: string) => {
+  const handleDeleteUser = async (id: string) => {
     if (id === MockDB.auth.user()?.id) return alert("You cannot delete your own account.");
     if (window.confirm('Delete this user and all progress?')) {
-      MockDB.admin.deleteUser(id);
+      await MockDB.admin.deleteUser(id);
       refreshPanel();
     }
   };
 
-  const handleToggleBlock = (user: User) => {
+  const handleToggleBlock = async (user: User) => {
     if (user.id === MockDB.auth.user()?.id) return alert("You cannot block yourself.");
-    MockDB.admin.updateUser(user.id, { status: user.status === 'blocked' ? 'active' : 'blocked' });
+    await MockDB.admin.updateUser(user.id, { status: user.status === 'blocked' ? 'active' : 'blocked' });
     refreshPanel();
   };
 
-  const handleAddQuestion = (e: React.FormEvent) => {
+  const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    MockDB.questions.add({ ...qForm, chapterId: qForm.chapterId || undefined });
+    await MockDB.questions.add({ ...qForm, chapterId: qForm.chapterId || undefined });
     setShowAddQuestion(false);
     setQForm({ subject: 'Physics', chapterId: '', examTag: '', text: '', options: ['', '', '', ''], correctAnswer: 0 });
     refreshPanel();
   };
 
-  const handleDeleteQuestion = (id: string) => {
+  const handleDeleteQuestion = async (id: string) => {
     if (window.confirm('Delete this question?')) {
-      MockDB.questions.delete(id);
+      await MockDB.questions.delete(id);
       refreshPanel();
     }
   };
 
-  const handleCreateMock = () => {
+  const handleCreateMock = async () => {
     if (!mockName || selectedQIds.size === 0) return alert("Missing name or questions.");
-    MockDB.tests.addMasterMock({
+    await MockDB.tests.addMasterMock({
       id: `mock_${Date.now()}`,
       name: mockName,
       durationMinutes: mockDuration,
@@ -138,9 +155,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
     alert("Master Test published to student portals!");
   };
 
-  const handleDeleteMasterMock = (id: string) => {
+  const handleDeleteMasterMock = async (id: string) => {
     if (window.confirm('Are you sure you want to decommission this test? It will disappear from all student accounts.')) {
-      MockDB.tests.deleteMasterMock(id);
+      await MockDB.tests.deleteMasterMock(id);
       refreshPanel();
     }
   };
@@ -183,8 +200,64 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
       )}
 
       {initialTab === 'ai-config' && (
-        <div className="space-y-8">
+        <div className="space-y-12">
           {renderSectionHeader('System Settings', 'Configure the local Smart Logic engine behavior and global defaults.')}
+          
+          <div className="glass-card p-10 rounded-[4rem] border border-slate-100 bg-white shadow-xl relative overflow-hidden mb-12">
+            <div className="absolute top-0 right-0 p-12 opacity-5 rotate-12">
+              <Database size={200} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-16 h-16 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center shadow-2xl">
+                   <Server className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Relational Engine Configuration</h3>
+                  <p className="text-slate-500 font-medium">Switch between Simulated (Mock) and Production (Live) MySQL layers.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Database Node</span>
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isLive ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                        {isLive ? 'PHP_MYSQL_PROD' : 'LOCAL_BROWSER_MOCK'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed font-medium">
+                      {isLive 
+                        ? 'System is currently hitting external API endpoints. Ensure your XAMPP server is active at localhost.' 
+                        : 'System is running in sandbox mode. All data is saved to the browser LocalStorage.'}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={handleToggleDataMode}
+                    className={`w-full py-6 rounded-[2rem] font-black uppercase tracking-[0.3em] shadow-2xl transition-all flex items-center justify-center gap-3 ${
+                      isLive 
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    }`}
+                  >
+                    {isLive ? <HardDrive className="w-5 h-5" /> : <Globe className="w-5 h-5" />}
+                    {isLive ? 'Switch to Mock Storage' : 'Switch to Live Database'}
+                  </button>
+                </div>
+                <div className="flex flex-col justify-center space-y-4 bg-slate-900 p-8 rounded-[3rem] text-white">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="text-indigo-400 w-6 h-6" />
+                    <span className="font-black uppercase tracking-widest text-[10px]">Security Protocol</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Switching modes requires a system reload to purge cached data pointers. Live mode assumes a Laravel/PHP bridge is running at <code className="text-indigo-400 bg-white/5 px-2 rounded">/api/*</code>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-5">
               <h3 className="font-black text-slate-800 uppercase tracking-widest text-[10px] flex items-center gap-2"><Cog className="w-4 h-4 text-indigo-600" /> Assistant Defaults</h3>
@@ -239,7 +312,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ initialTab }) => {
         <div className="space-y-8">
           {renderSectionHeader('Course Builder', 'Architect the core syllabus, study notes, and tutorial inventories.')}
           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-             <SubjectTracker chapters={MockDB.chapters.all()} updateChapter={(updated) => { MockDB.chapters.update(updated.id, updated); refreshPanel(); }} isAdmin={true} />
+             <SubjectTracker chapters={chapters} updateChapter={(updated) => { MockDB.chapters.update(updated.id, updated); refreshPanel(); }} isAdmin={true} />
           </div>
         </div>
       )}

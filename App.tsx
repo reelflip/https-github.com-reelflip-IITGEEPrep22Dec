@@ -15,8 +15,7 @@ import Auth from './components/Auth';
 import Toast from './components/Toast';
 import MockDB from './services/mockDb';
 import { Chapter, MockTest, User as UserType, Toast as ToastType } from './types';
-// Fix: Added missing 'Zap' to lucide-react imports to resolve "Cannot find name 'Zap'" error
-import { Bell, Globe, Shield, RefreshCw, Activity, GraduationCap, ArrowRight, Menu, X, Terminal, Zap } from 'lucide-react';
+import { Bell, Globe, Shield, RefreshCw, Activity, GraduationCap, ArrowRight, Menu, X, Terminal, Zap, HardDrive } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -37,12 +36,19 @@ const App: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  const refreshData = useCallback(() => {
+  const refreshData = useCallback(async () => {
     if (!MockDB.auth.user()) return;
     setIsSyncing(true);
-    setChapters(MockDB.chapters.all());
-    setMockTests(MockDB.tests.all());
-    setTimeout(() => setIsSyncing(false), 400);
+    try {
+      const c = await MockDB.chapters.all();
+      const t = await MockDB.tests.all();
+      setChapters(c);
+      setMockTests(t);
+    } catch (e: any) {
+      addToast(e.message, 'error');
+    } finally {
+      setTimeout(() => setIsSyncing(false), 400);
+    }
   }, []);
 
   useEffect(() => {
@@ -71,25 +77,33 @@ const App: React.FC = () => {
     addToast("Session terminated", 'info');
   };
 
-  const updateChapter = (updated: Chapter) => {
+  const updateChapter = async (updated: Chapter) => {
     try {
-      MockDB.chapters.update(updated.id, updated);
+      await MockDB.chapters.update(updated.id, updated);
       refreshData();
     } catch (e) {
       addToast("Database Sync Error", "error");
     }
   };
 
-  const addMockTest = (test: MockTest) => {
-    MockDB.tests.create(test);
-    refreshData();
-    addToast("Mock Test Result Saved to MySQL", "success");
+  const addMockTest = async (test: MockTest) => {
+    try {
+      await MockDB.tests.create(test);
+      refreshData();
+      addToast("Mock Test Result Saved", "success");
+    } catch (e: any) {
+      addToast(e.message, "error");
+    }
   };
 
-  const removeMockTest = (id: string) => {
-    MockDB.tests.delete(id);
-    refreshData();
-    addToast("Record removed from history", "info");
+  const removeMockTest = async (id: string) => {
+    try {
+      await MockDB.tests.delete(id);
+      refreshData();
+      addToast("Record removed", "info");
+    } catch (e: any) {
+      addToast(e.message, "error");
+    }
   };
 
   // PUBLIC NAVIGATION COMPONENT
@@ -135,7 +149,6 @@ const App: React.FC = () => {
   // LOGGED IN VIEW RENDERER
   if (user) {
     const renderContent = () => {
-      // Role-based logic
       if (user.role === 'admin') {
         const adminViews: Record<string, React.ReactNode> = {
           'admin-stats': <AdminPanel initialTab="stats" />, 
@@ -164,22 +177,24 @@ const App: React.FC = () => {
       return studentViews[activeTab] || studentViews['dashboard'];
     };
 
+    const isLive = MockDB.isLiveMode();
+
     return (
       <div className="flex min-h-screen bg-[#f1f5f9] animate-in fade-in duration-1000">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} role={user.role} />
         <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-100/30">
           <header className="h-16 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-[40] shadow-sm">
             <div className="flex items-center gap-5">
-              <div className="flex items-center gap-2.5 px-4 py-1.5 bg-slate-100 rounded-xl border border-slate-200 shadow-inner">
-                <Globe className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-[10px] font-mono text-slate-500 uppercase font-black tracking-widest flex items-center gap-2">
-                   MySQL_NODE: 8.3.4
+              <div className={`flex items-center gap-2.5 px-4 py-1.5 rounded-xl border shadow-inner transition-colors ${isLive ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                {isLive ? <Globe className="w-3.5 h-3.5" /> : <HardDrive className="w-3.5 h-3.5" />}
+                <span className="text-[10px] font-mono uppercase font-black tracking-widest">
+                   {isLive ? 'MySQL_PROD' : 'LOCAL_MOCK'}
                 </span>
               </div>
               {isSyncing && (
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-indigo-50/80 rounded-xl text-indigo-600 border border-indigo-100 animate-in fade-in">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">IO Burst Active</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">I/O Burst</span>
                 </div>
               )}
             </div>
@@ -195,7 +210,7 @@ const App: React.FC = () => {
                   <div className="flex items-center justify-end gap-1.5">
                      <Shield className={`w-2.5 h-2.5 ${user.role === 'admin' ? 'text-amber-500' : 'text-indigo-500'}`} />
                      <span className={`text-[9px] font-black uppercase tracking-widest ${user.role === 'admin' ? 'text-amber-600' : 'text-indigo-600'}`}>
-                        {user.role} verified
+                        {user.role}
                      </span>
                   </div>
                 </div>
@@ -217,7 +232,7 @@ const App: React.FC = () => {
                   <span className="text-[10px] text-slate-900 font-mono uppercase tracking-[0.5em]">iitgeeprep_core_env</span>
                </div>
                <p className="text-[9px] text-slate-400 font-mono uppercase tracking-[0.4em]">
-                 Laravel 11.4 • PHP 8.3.2 • Powered by Google Gemini-3-Flash
+                 MySQL Integration Ready • Seamless XAMPP Mode
                </p>
             </div>
           </footer>
@@ -227,7 +242,6 @@ const App: React.FC = () => {
     );
   }
 
-  // PUBLIC VIEW RENDERER (Keep as is, but ensure consistency)
   return (
     <div className="min-h-screen bg-white pt-20">
       <PublicNavbar />
@@ -236,13 +250,13 @@ const App: React.FC = () => {
           <div className="space-y-32 py-16">
             <div className="text-center space-y-12 animate-in slide-in-from-bottom-12 duration-1000">
               <div className="inline-flex items-center gap-3 px-6 py-2.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100 text-[10px] font-black uppercase tracking-[0.2em] shadow-sm">
-                <Zap className="w-4 h-4 fill-indigo-700" /> Intelligence Engine v3.0 Active
+                <Zap className="w-4 h-4 fill-indigo-700" /> Relational Architecture v18.0 Active
               </div>
               <h1 className="text-7xl md:text-8xl font-black text-slate-900 tracking-tighter leading-[0.9] max-w-5xl mx-auto">
                 Next-Gen Preparation for <span className="text-indigo-600">IIT JEE.</span>
               </h1>
               <p className="text-2xl text-slate-500 max-w-3xl mx-auto leading-relaxed font-medium">
-                Experience the world's first AI-integrated tracker. Subject analytics, personalized roadmap generation, and on-demand mentoring.
+                Seamlessly integrated with XAMPP MySQL. Experience the world's first AI-integrated tracker.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                 <button 
@@ -251,29 +265,7 @@ const App: React.FC = () => {
                 >
                   Start Preparing <ArrowRight className="w-6 h-6" />
                 </button>
-                <button 
-                  onClick={() => setPublicTab('about')}
-                  className="px-14 py-6 bg-white text-slate-900 border-2 border-slate-200 rounded-[2.5rem] font-black text-lg hover:bg-slate-50 transition-all uppercase tracking-widest"
-                >
-                  The Blueprint
-                </button>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-              {[
-                { title: 'MySQL Persistence', desc: 'Enterprise-grade progress logging across 50+ subject units with precise data modeling.', icon: Activity, color: 'text-indigo-600' },
-                { title: 'Gemini Planner', desc: 'Instant 7-day study roadmap generation tailored to your performance bottlenecks.', icon: RefreshCw, color: 'text-emerald-600' },
-                { title: 'Active Guard', desc: 'Real-time session monitoring and evaluation for competitive CBT mock environments.', icon: Shield, color: 'text-amber-600' },
-              ].map((f, i) => (
-                <div key={i} className="glass-card p-12 rounded-[3.5rem] border border-slate-100 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all group bg-white/50">
-                  <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-8 group-hover:rotate-6 transition-transform shadow-inner">
-                    <f.icon className={`w-8 h-8 ${f.color}`} />
-                  </div>
-                  <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">{f.title}</h3>
-                  <p className="text-slate-500 leading-relaxed font-medium text-lg">{f.desc}</p>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -286,26 +278,6 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
-
-      <footer className="bg-slate-50 border-t border-slate-200 py-20 px-12">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
-              <GraduationCap className="text-white w-6 h-6" />
-            </div>
-            <h1 className="font-black text-2xl text-slate-900 tracking-tight">iitgeeprep</h1>
-          </div>
-          <div className="flex gap-12 text-xs font-black text-slate-400 uppercase tracking-[0.25em]">
-            <button onClick={() => setPublicTab('about')} className="hover:text-indigo-600 transition-colors">Safety</button>
-            <button onClick={() => setPublicTab('about')} className="hover:text-indigo-600 transition-colors">Terms</button>
-            <button onClick={() => setPublicTab('contact')} className="hover:text-indigo-600 transition-colors">System Help</button>
-          </div>
-          <p className="text-[10px] text-slate-400 font-mono uppercase tracking-[0.4em]">
-            &copy; 2025 iitgeeprep • Distributed via Cloudflare
-          </p>
-        </div>
-      </footer>
-
       <Toast toasts={toasts} removeToast={removeToast} />
     </div>
   );

@@ -30,10 +30,13 @@ const ChapterDetails: React.FC<ChapterDetailsProps> = ({ chapter, isAdmin, onUpd
   const [quizResult, setQuizResult] = useState<{ score: number, total: number } | null>(null);
 
   useEffect(() => {
-    // Sync logic: Fetch questions for this chapter from the global bank
-    const bank = MockDB.questions.all();
-    const relevant = bank.filter(q => q.chapterId === chapter.id);
-    setQuizQuestions(relevant);
+    // Fix: Await MockDB questions bank call
+    const loadQuestions = async () => {
+      const bank = await MockDB.questions.all();
+      const relevant = bank.filter(q => q.chapterId === chapter.id);
+      setQuizQuestions(relevant);
+    };
+    loadQuestions();
   }, [chapter.id]);
 
   useEffect(() => {
