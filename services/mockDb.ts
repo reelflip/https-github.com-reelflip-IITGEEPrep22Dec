@@ -20,12 +20,13 @@ class MockDB {
 
   /**
    * API BRIDGE UTILITY
+   * Targets the api.php endpoint provided in the root.
    */
   private static async apiFetch(endpoint: string, options: any = {}) {
-    // In a real Laravel deployment, this would be the API route prefix
-    const baseUrl = '/api'; 
+    // Relative path for XAMPP deployment
+    const baseUrl = '/api.php?route='; 
     try {
-      const response = await fetch(`${baseUrl}/${endpoint}`, {
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -39,18 +40,17 @@ class MockDB {
       return await response.json();
     } catch (e: any) {
       console.error("Critical: Live Database Connectivity Failure:", e);
-      throw new Error("Unable to connect to MySQL backend. Ensure XAMPP is active.");
+      throw new Error("Unable to connect to MySQL backend. Ensure XAMPP and MySQL are active.");
     }
   }
 
   /**
-   * MOCK STORAGE ENGINE
+   * MOCK STORAGE ENGINE (LOCAL)
    */
   private static getDB() {
     const data = localStorage.getItem(this.STORAGE_KEY);
     if (!data) return this.seedDB();
     const db = JSON.parse(data);
-    if (db.version !== this.SCHEMA_VERSION) return this.migrate(db);
     return db;
   }
 
@@ -75,18 +75,12 @@ class MockDB {
     return initial;
   }
 
-  private static migrate(oldDb: any) {
-    const migrated = { ...oldDb, version: this.SCHEMA_VERSION };
-    this.saveDB(migrated);
-    return migrated;
-  }
-
   private static saveDB(data: any) {
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
   }
 
   /**
-   * AUTHENTICATION & IDENTITY
+   * AUTHENTICATION
    */
   static auth = {
     user: (): User | null => MockDB.getDB().currentUser,
@@ -94,49 +88,50 @@ class MockDB {
       if (MockDB.isLiveMode()) {
         try {
           const res = await MockDB.apiFetch('login', { method: 'POST', body: JSON.stringify({ email, password: pass }) });
+          // Update local "current user" session cache
           const db = MockDB.getDB();
           db.currentUser = res.user;
           MockDB.saveDB(db);
           return res.user;
         } catch (e: any) { return e.message; }
       }
+      // Local Fallback
       const db = MockDB.getDB();
       const user = db.users.find((u: User) => u.email === email && u.password === pass);
       if (user) {
-        if (user.status === 'blocked') return "Account access restricted by system administrator.";
         db.currentUser = user;
         MockDB.saveDB(db);
         return user;
       }
-      return "Invalid email or security password.";
+      return "Invalid credentials.";
     },
     register: async (name: string, email: string, pass: string, hint: string): Promise<User | string> => {
       if (MockDB.isLiveMode()) {
-        try {
-          return await MockDB.apiFetch('register', { method: 'POST', body: JSON.stringify({ name, email, password: pass, recoveryHint: hint }) });
-        } catch (e: any) { return e.message; }
+        return await MockDB.apiFetch('register', { method: 'POST', body: JSON.stringify({ name, email, password: pass, recoveryHint: hint }) });
       }
       const db = MockDB.getDB();
-      if (db.users.find((u: User) => u.email === email)) return "Identity already registered.";
       const newUser: User = { id: `u_${Date.now()}`, name, email, password: pass, role: 'student', joined: new Date().toISOString(), status: 'active', recoveryHint: hint };
       db.users.push(newUser);
-      const userChapters = db.globalChapters.map((c: any) => ({ ...c, id: `${newUser.id}_${c.id}`, userId: newUser.id, questions: [] }));
-      db.userChapters = [...(db.userChapters || []), ...userChapters];
       db.currentUser = newUser;
       MockDB.saveDB(db);
       return newUser;
     },
+    // Fix: Added missing recover method to MockDB.auth
     recover: async (email: string, hint: string, newPass: string): Promise<string> => {
       if (MockDB.isLiveMode()) {
-        const res = await MockDB.apiFetch('recover', { method: 'POST', body: JSON.stringify({ email, recoveryHint: hint, newPassword: newPass }) });
-        return res.success ? "SUCCESS" : res.error;
+        try {
+          const res = await MockDB.apiFetch('recover', { method: 'POST', body: JSON.stringify({ email, recoveryHint: hint, newPassword: newPass }) });
+          return res.success ? "SUCCESS" : (res.error || "Recovery failed.");
+        } catch (e: any) { return e.message; }
       }
       const db = MockDB.getDB();
-      const user = db.users.find((u: User) => u.email === email);
-      if (!user || user.recoveryHint !== hint) return "Security verification failed.";
-      user.password = newPass;
-      MockDB.saveDB(db);
-      return "SUCCESS";
+      const user = db.users.find((u: User) => u.email === email && u.recoveryHint === hint);
+      if (user) {
+        user.password = newPass;
+        MockDB.saveDB(db);
+        return "SUCCESS";
+      }
+      return "Invalid email or recovery key.";
     },
     logout: () => {
       const db = MockDB.getDB();
@@ -146,126 +141,84 @@ class MockDB {
   };
 
   /**
-   * CURRICULUM & PROGRESS
+   * DATA ACCESSORS
    */
   static chapters = {
     all: async (): Promise<Chapter[]> => {
       if (MockDB.isLiveMode()) {
-        const userId = MockDB.auth.user()?.id;
-        return await MockDB.apiFetch(`chapters?userId=${userId}`);
+        const user = MockDB.auth.user();
+        return await MockDB.apiFetch(`getChapters&userId=${user?.id}`);
       }
       const db = MockDB.getDB();
       const user = db.currentUser;
-      if (!user) return [];
-      return user.role === 'admin' ? db.globalChapters : db.userChapters.filter((c: Chapter) => c.userId === user.id);
+      return user?.role === 'admin' ? db.globalChapters : db.userChapters.filter((c: Chapter) => c.userId === user?.id);
     },
     update: async (id: string, updates: Partial<Chapter>): Promise<Chapter> => {
       if (MockDB.isLiveMode()) {
-        return await MockDB.apiFetch(`chapters/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
+        return await MockDB.apiFetch(`updateChapter`, { method: 'POST', body: JSON.stringify({ id, ...updates }) });
       }
       const db = MockDB.getDB();
-      const user = db.currentUser;
-      const key = user?.role === 'admin' ? 'globalChapters' : 'userChapters';
+      const key = db.currentUser?.role === 'admin' ? 'globalChapters' : 'userChapters';
       db[key] = db[key].map((c: Chapter) => c.id === id ? { ...c, ...updates } : c);
       MockDB.saveDB(db);
       return db[key].find((c: Chapter) => c.id === id);
     }
   };
 
-  /**
-   * QUESTION REPOSITORY
-   */
   static questions = {
     all: async (): Promise<Question[]> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('questions');
+      if (MockDB.isLiveMode()) return await MockDB.apiFetch('getQuestions');
       return MockDB.getDB().globalQuestions || [];
     },
     add: async (q: Omit<Question, 'id'>): Promise<Question> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('questions', { method: 'POST', body: JSON.stringify(q) });
+      if (MockDB.isLiveMode()) return await MockDB.apiFetch('addQuestion', { method: 'POST', body: JSON.stringify(q) });
       const db = MockDB.getDB();
       const newQ = { ...q, id: `q_${Date.now()}` };
       db.globalQuestions.push(newQ);
       MockDB.saveDB(db);
       return newQ;
-    },
-    delete: async (id: string): Promise<void> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch(`questions/${id}`, { method: 'DELETE' });
-      const db = MockDB.getDB();
-      db.globalQuestions = db.globalQuestions.filter((q: Question) => q.id !== id);
-      MockDB.saveDB(db);
     }
   };
 
-  /**
-   * TEST ENGINE
-   */
   static tests = {
     all: async (): Promise<MockTest[]> => {
       if (MockDB.isLiveMode()) {
-        const userId = MockDB.auth.user()?.id;
-        return await MockDB.apiFetch(`tests?userId=${userId}`);
+        const user = MockDB.auth.user();
+        return await MockDB.apiFetch(`getTests&userId=${user?.id}`);
       }
       return MockDB.getDB().tests.filter((t: MockTest) => t.userId === MockDB.getDB().currentUser?.id);
     },
     getMasterMocks: async (): Promise<MasterMockTest[]> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('master-mocks');
+      if (MockDB.isLiveMode()) return await MockDB.apiFetch('getMasterMocks');
       return MockDB.getDB().masterMocks;
     },
-    addMasterMock: async (mock: MasterMockTest): Promise<void> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('master-mocks', { method: 'POST', body: JSON.stringify(mock) });
-      const db = MockDB.getDB();
-      db.masterMocks.push(mock);
-      MockDB.saveDB(db);
-    },
-    deleteMasterMock: async (id: string): Promise<void> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch(`master-mocks/${id}`, { method: 'DELETE' });
-      const db = MockDB.getDB();
-      db.masterMocks = db.masterMocks.filter((m: MasterMockTest) => m.id !== id);
-      MockDB.saveDB(db);
-    },
     create: async (test: MockTest): Promise<MockTest> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('tests', { method: 'POST', body: JSON.stringify(test) });
+      if (MockDB.isLiveMode()) {
+        const user = MockDB.auth.user();
+        return await MockDB.apiFetch('addTest', { method: 'POST', body: JSON.stringify({ ...test, userId: user?.id }) });
+      }
       const db = MockDB.getDB();
-      const newTest = { ...test, userId: db.currentUser?.id };
-      db.tests.unshift(newTest);
+      db.tests.unshift({ ...test, userId: db.currentUser?.id });
       MockDB.saveDB(db);
-      return newTest;
+      return test;
     },
-    delete: async (id: string): Promise<void> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch(`tests/${id}`, { method: 'DELETE' });
+    // Fix: Added missing delete method to MockDB.tests
+    delete: async (id: string): Promise<boolean> => {
+      if (MockDB.isLiveMode()) {
+        await MockDB.apiFetch('deleteTest', { method: 'POST', body: JSON.stringify({ id }) });
+        return true;
+      }
       const db = MockDB.getDB();
       db.tests = db.tests.filter((t: MockTest) => t.id !== id);
       MockDB.saveDB(db);
+      return true;
     }
   };
 
-  /**
-   * ADMIN & SYSTEM OPERATIONS
-   */
   static admin = {
     getAllUsers: async (): Promise<User[]> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('users');
+      if (MockDB.isLiveMode()) return await MockDB.apiFetch('getUsers');
       return MockDB.getDB().users;
-    },
-    addUser: async (user: Omit<User, 'id' | 'joined' | 'status'>): Promise<User> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch('users', { method: 'POST', body: JSON.stringify(user) });
-      const db = MockDB.getDB();
-      const newUser: User = { ...user, id: `u_${Date.now()}`, joined: new Date().toISOString(), status: 'active' };
-      db.users.push(newUser);
-      MockDB.saveDB(db);
-      return newUser;
-    },
-    updateUser: async (id: string, updates: Partial<User>): Promise<void> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch(`users/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
-      const db = MockDB.getDB();
-      db.users = db.users.map((u: User) => u.id === id ? { ...u, ...updates } : u);
-      MockDB.saveDB(db);
-    },
-    deleteUser: async (id: string): Promise<void> => {
-      if (MockDB.isLiveMode()) return await MockDB.apiFetch(`users/${id}`, { method: 'DELETE' });
-      const db = MockDB.getDB();
-      db.users = db.users.filter((u: User) => u.id !== id);
-      MockDB.saveDB(db);
     },
     getLogs: () => MockDB.getDB().logs,
     getSystemStats: () => {
@@ -276,7 +229,7 @@ class MockDB {
         totalTestsTaken: db.tests.length,
         dbSize: (JSON.stringify(db).length / 1024).toFixed(2) + ' KB',
         version: db.version,
-        mode: MockDB.isLiveMode() ? 'LIVE' : 'MOCK'
+        mode: MockDB.isLiveMode() ? 'LIVE PRODUCTION' : 'LOCAL MOCK'
       };
     }
   };
